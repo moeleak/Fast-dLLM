@@ -79,6 +79,7 @@ run_eval() {
   if [[ "${task}" == planner ]]; then
     TASK=planner MODEL_PATH="${model}" PROCESSOR_PATH="${planner_output}" \
       DATASET="${dataset_or_root}" ALGORITHM="${algorithm}" OUTPUT_DIR="${output}" \
+      EXPECTED_SAMPLE_IDS_SHA256="${expected_hash}" \
       bash "${eval_dir}/run_gui_eval_2gpu.sh"
   else
     TASK=grounder MODEL_PATH="${model}" PROCESSOR_PATH="${planner_output}" \
@@ -89,12 +90,19 @@ run_eval() {
   fi
 }
 
+planner_validation_ids_sha256="$(python3 - "${work_root}/data/planner/audit.json" <<'PY'
+import json
+import sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["validation_selection"]["sample_ids_sha256"])
+PY
+)"
 planner_candidates=()
 for step in 813 1626; do
   predictions="${work_root}/validation/planner-${step}"
   score="${predictions}/score.json"
   run_eval planner "${planner_output}/checkpoint-${step}" "" \
-    "${work_root}/data/planner/validation-100.json" "" mdm "${predictions}"
+    "${work_root}/data/planner/validation-100.json" "" mdm "${predictions}" \
+    "${planner_validation_ids_sha256}"
   python3 "${eval_dir}/score_gui.py" --task planner --predictions-dir "${predictions}" \
     --expected-samples 100 --step "${step}" --algorithm mdm --output "${score}"
   planner_candidates+=(--candidate "${score}")

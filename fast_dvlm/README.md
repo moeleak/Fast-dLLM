@@ -274,6 +274,9 @@ handling 50 samples each. OCR is not run during inference; the benchmark
 consumes the pre-generated OCR-aligned crop and SSR annotation.
 `final/comparison.json` records quality, mean/p50/p95 latency, weights, peak
 GPU memory, the shared-runtime audit, and the fixed baselines.
+Every Planner validation launch checks the ordered validation-100 sample-ID
+digest from the conversion audit; Grounder validation and test launches also
+authenticate their benchmark manifests before creating an engine.
 
 ## Evaluation (VLMEvalKit)
 

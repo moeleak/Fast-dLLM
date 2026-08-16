@@ -57,6 +57,8 @@ class GuiContractsTest(unittest.TestCase):
         self.assertLess(runtime_gate, heldout_comment)
         self.assertLess(heldout_comment, final_eval)
         self.assertIn('--shared-runtime-audit "${shared_runtime_audit}"', text)
+        self.assertIn('planner_validation_ids_sha256=', text)
+        self.assertIn('EXPECTED_SAMPLE_IDS_SHA256="${expected_hash}"', text)
 
     def test_completed_evaluation_is_reused_without_worker_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
