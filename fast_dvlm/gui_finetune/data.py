@@ -408,7 +408,9 @@ def convert_grounder_dataset(
     for domain, directory in (("mind2web", mind2web_dir), ("mobile", mobile_dir)):
         directory = directory.resolve()
         for shard, source in _iter_parquet_rows(directory):
-            shard_hashes[domain].setdefault(str(shard), sha256_file(shard))
+            shard_key = str(shard)
+            if shard_key not in shard_hashes[domain]:
+                shard_hashes[domain][shard_key] = sha256_file(shard)
             sample_id = str(source.get("sample_id", "")).strip()
             if not sample_id or sample_id in seen_ids:
                 raise ValueError(f"missing or duplicate grounder sample id: {sample_id}")

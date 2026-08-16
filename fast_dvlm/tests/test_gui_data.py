@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -133,11 +134,27 @@ class GuiDataTest(unittest.TestCase):
                     ]
                 )
                 pq.write_table(table, directory / "part.parquet")
-            audit = convert_grounder_dataset(
-                sources["mind2web"],
-                sources["mobile"],
-                root / "out",
-                expected_counts={"mind2web": 2, "mobile": 2},
+            with mock.patch(
+                "fast_dvlm.gui_finetune.data.sha256_file",
+                wraps=sha256_file,
+            ) as hash_file:
+                audit = convert_grounder_dataset(
+                    sources["mind2web"],
+                    sources["mobile"],
+                    root / "out",
+                    expected_counts={"mind2web": 2, "mobile": 2},
+                )
+            parquet_hashes = [
+                call.args[0]
+                for call in hash_file.call_args_list
+                if call.args[0].suffix == ".parquet"
+            ]
+            self.assertEqual(
+                parquet_hashes,
+                [
+                    (sources["mind2web"] / "part.parquet").resolve(),
+                    (sources["mobile"] / "part.parquet").resolve(),
+                ],
             )
             rows = json.loads((root / "out" / "train.json").read_text())
             self.assertEqual(len(rows), 4)
