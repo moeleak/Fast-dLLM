@@ -40,6 +40,7 @@ from fast_dvlm.gui_finetune.training import (
     learning_rate_for,
     parameter_role,
     processor_artifact_source,
+    validate_multimodal_processor,
     validate_stage_hyperparameters,
 )
 
@@ -105,7 +106,7 @@ def main() -> None:
     import torch
     from torch.optim.lr_scheduler import LambdaLR
     from torch.utils.data import Sampler
-    from transformers import AutoProcessor, HfArgumentParser, Trainer, TrainerCallback
+    from transformers import HfArgumentParser, Qwen2_5_VLProcessor, Trainer, TrainerCallback
 
     from lmflow.args import ModelArguments, MultiModalDatasetArguments, AutoArguments
     from lmflow.datasets.dataset import Dataset
@@ -181,13 +182,20 @@ def main() -> None:
         model_args.model_name_or_path,
         model_args.tokenizer_name,
     )
-    processor = AutoProcessor.from_pretrained(
+    # Loading Fast-dVLM's trust_remote_code model registers its custom config in
+    # Transformers. AutoProcessor then incorrectly falls back to a text-only
+    # Qwen2TokenizerFast in the same process, so use the checkpoint-declared
+    # Qwen2.5-VL processor explicitly and fail before the collator if that
+    # multimodal contract ever changes.
+    processor = Qwen2_5_VLProcessor.from_pretrained(
         processor_source,
         revision=model_args.model_revision if processor_source == FAST_DVLM_MODEL else None,
         trust_remote_code=True,
         max_pixels=workflow.max_pixels,
+        use_fast=False,
     )
     processor.tokenizer = model.tokenizer
+    processor_audit = validate_multimodal_processor(processor)
     if workflow.allow_recipe_override:
         model_artifacts = {
             "source": model_args.model_name_or_path,
@@ -466,6 +474,7 @@ def main() -> None:
         "tokenizer": model_args.tokenizer_name,
         "tokenizer_artifacts": tokenizer_artifacts,
         "processor": processor_source,
+        "processor_audit": processor_audit,
         "code": _code_revision(),
         "mask_token_id": mask_id,
         "native_objective": {"mdm": True, "block_size": 32, "causal_auxiliary": True},

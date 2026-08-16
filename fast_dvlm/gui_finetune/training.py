@@ -37,6 +37,31 @@ def processor_artifact_source(model_path: str, tokenizer_name: str | None) -> st
     return tokenizer_name or model_path
 
 
+def validate_multimodal_processor(processor: Any) -> dict[str, str]:
+    """Reject tokenizer-only AutoProcessor fallbacks before collator execution."""
+
+    processor_type = f"{type(processor).__module__}.{type(processor).__qualname__}"
+    image_processor = getattr(processor, "image_processor", None)
+    required_callables = ("apply_chat_template", "batch_decode")
+    missing = [
+        name
+        for name in required_callables
+        if not callable(getattr(processor, name, None))
+    ]
+    if image_processor is None or missing:
+        details = ", ".join(missing) if missing else "image_processor"
+        raise TypeError(
+            f"Fast-dVLM requires a multimodal processor; got {processor_type} "
+            f"missing {details}"
+        )
+    return {
+        "processor_type": processor_type,
+        "image_processor_type": (
+            f"{type(image_processor).__module__}.{type(image_processor).__qualname__}"
+        ),
+    }
+
+
 def parameter_role(name: str) -> str:
     lowered = name.lower()
     if "lora_" in lowered:

@@ -24,6 +24,7 @@ from fast_dvlm.gui_finetune.training import (
     expected_epoch_samples,
     learning_rate_for,
     processor_artifact_source,
+    validate_multimodal_processor,
     validate_stage_hyperparameters,
 )
 
@@ -36,6 +37,19 @@ class GuiContractsTest(unittest.TestCase):
 
         def numel(self):
             return self.count
+
+    class MultimodalProcessor:
+        image_processor = object()
+
+        def apply_chat_template(self):
+            return None
+
+        def batch_decode(self):
+            return None
+
+    class TextTokenizer:
+        def apply_chat_template(self):
+            return None
 
     def test_resource_waiter_is_fail_closed(self):
         root = Path(__file__).resolve().parents[2]
@@ -126,6 +140,18 @@ class GuiContractsTest(unittest.TestCase):
             "/planner",
         )
         self.assertEqual(processor_artifact_source("base", None), "base")
+
+    def test_multimodal_processor_contract_rejects_tokenizer_fallback(self):
+        audit = validate_multimodal_processor(self.MultimodalProcessor())
+        self.assertIn("MultimodalProcessor", audit["processor_type"])
+        with self.assertRaisesRegex(TypeError, "multimodal processor"):
+            validate_multimodal_processor(self.TextTokenizer())
+
+        root = Path(__file__).resolve().parents[2]
+        entrypoint = root / "fast_dvlm" / "train_scripts" / "train_gui.py"
+        text = entrypoint.read_text(encoding="utf-8")
+        self.assertIn("Qwen2_5_VLProcessor.from_pretrained", text)
+        self.assertIn("use_fast=False", text)
 
     def test_stage_recipes(self):
         validate_stage_hyperparameters(
