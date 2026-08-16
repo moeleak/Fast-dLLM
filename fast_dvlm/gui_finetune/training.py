@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import random
 import re
 from collections import Counter
 from dataclasses import dataclass
@@ -65,6 +66,36 @@ def balance_weights(keys: Sequence[str], power: float) -> list[float]:
     if not keys or "" in counts:
         raise ValueError("every training row must have a non-empty balance key")
     return [math.pow(counts[key], -power) for key in keys]
+
+
+def exact_balanced_epoch_indices(
+    keys: Sequence[str],
+    *,
+    epoch_samples: int,
+    seed: int,
+) -> list[int]:
+    """Draw an exactly balanced, deterministic epoch across all domains."""
+
+    groups: dict[str, list[int]] = {}
+    for index, key in enumerate(keys):
+        if not key:
+            raise ValueError("every training row must have a non-empty balance key")
+        groups.setdefault(key, []).append(index)
+    if not groups or epoch_samples <= 0 or epoch_samples % len(groups):
+        raise ValueError("epoch size must be positive and divisible by the domain count")
+    per_group = epoch_samples // len(groups)
+    generator = random.Random(seed)
+    selected: list[int] = []
+    for key in sorted(groups):
+        source = groups[key]
+        domain_indices: list[int] = []
+        while len(domain_indices) < per_group:
+            cycle = source.copy()
+            generator.shuffle(cycle)
+            domain_indices.extend(cycle[: per_group - len(domain_indices)])
+        selected.extend(domain_indices)
+    generator.shuffle(selected)
+    return selected
 
 
 def is_text_lora_parameter(name: str) -> bool:

@@ -20,6 +20,7 @@ from fast_dvlm.gui_finetune.training import (
     LearningRates,
     audit_parameters,
     balance_weights,
+    exact_balanced_epoch_indices,
     expected_epoch_samples,
     learning_rate_for,
     validate_stage_hyperparameters,
@@ -83,6 +84,19 @@ class GuiContractsTest(unittest.TestCase):
         self.assertEqual(expected_epoch_samples("grounder", None), 16528)
         weights = balance_weights(["mind2web"] * 2 + ["mobile"] * 4, 1.0)
         self.assertAlmostEqual(sum(weights[:2]), sum(weights[2:]))
+        keys = ["mind2web"] * 3 + ["mobile"] * 4
+        indices = exact_balanced_epoch_indices(keys, epoch_samples=8, seed=42)
+        selected = [keys[index] for index in indices]
+        self.assertEqual(selected.count("mind2web"), 4)
+        self.assertEqual(selected.count("mobile"), 4)
+        self.assertEqual(
+            indices,
+            exact_balanced_epoch_indices(keys, epoch_samples=8, seed=42),
+        )
+        self.assertNotEqual(
+            indices,
+            exact_balanced_epoch_indices(keys, epoch_samples=8, seed=43),
+        )
 
     def test_stage_recipes(self):
         validate_stage_hyperparameters(

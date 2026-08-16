@@ -30,6 +30,7 @@ from fast_dvlm.gui_finetune.training import (
     audit_parameters,
     audit_zero_delta,
     balance_weights,
+    exact_balanced_epoch_indices,
     expected_epoch_samples,
     learning_rate_for,
     parameter_role,
@@ -210,12 +211,14 @@ def main() -> None:
             self,
             weights,
             *,
+            exact_group_keys,
             replicas: int,
             rank: int,
             seed: int,
             epoch_samples: int,
         ):
             self.weights = torch.as_tensor(weights, dtype=torch.double)
+            self.exact_group_keys = exact_group_keys
             self.replicas = replicas
             self.rank = rank
             self.seed = seed
@@ -226,12 +229,19 @@ def main() -> None:
             generator = torch.Generator()
             generator.manual_seed(self.seed + self.epoch)
             total = self.samples_per_rank * self.replicas
-            indices = torch.multinomial(
-                self.weights,
-                total,
-                replacement=True,
-                generator=generator,
-            ).tolist()
+            if self.exact_group_keys is None:
+                indices = torch.multinomial(
+                    self.weights,
+                    total,
+                    replacement=True,
+                    generator=generator,
+                ).tolist()
+            else:
+                indices = exact_balanced_epoch_indices(
+                    self.exact_group_keys,
+                    epoch_samples=total,
+                    seed=self.seed + self.epoch,
+                )
             return iter(indices[self.rank:total:self.replicas])
 
         def __len__(self):
@@ -287,6 +297,7 @@ def main() -> None:
             weights = balance_weights(keys, float(workflow.balance_power))
             return DistributedWeightedSampler(
                 weights,
+                exact_group_keys=keys if workflow.stage == "grounder" else None,
                 replicas=max(1, int(self.args.world_size)),
                 rank=int(self.args.process_index),
                 seed=int(self.args.seed),
@@ -415,6 +426,15 @@ def main() -> None:
         "mask_token_id": mask_id,
         "native_objective": {"mdm": True, "block_size": 32, "causal_auxiliary": True},
         "dataset": dataset_audit,
+        "sampler": {
+            "method": (
+                "exact_domain_balance" if workflow.stage == "grounder"
+                else "inverse_frequency_power"
+            ),
+            "balance_power": float(workflow.balance_power),
+            "logical_epoch_samples": expected_epoch_samples(workflow.stage, source_audit),
+            "seed": int(training_args.seed),
+        },
         "assistant_only_masking": masking_audit,
         "source_audit": source_audit,
         "parameters": parameter_audit,
