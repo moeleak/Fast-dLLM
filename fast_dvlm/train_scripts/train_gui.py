@@ -30,6 +30,7 @@ from fast_dvlm.gui_finetune.training import (
     FAST_DVLM_MASK_TOKEN_ID,
     FAST_DVLM_MODEL,
     FAST_DVLM_REVISION,
+    GradientRoleTracker,
     LORA_TARGETS,
     LearningRates,
     audit_parameters,
@@ -301,31 +302,20 @@ def main() -> None:
             self.epoch = epoch
 
     class GradientAuditCallback(TrainerCallback):
-        def __init__(self, stage: str):
-            self.stage = stage
+        def __init__(self, stage: str, named_parameters):
             self.result = None
+            self.tracker = GradientRoleTracker(stage)
+            self.tracker.attach(named_parameters)
 
         def on_pre_optimizer_step(self, args, state, control, model=None, **kwargs):
-            if self.result is not None or model is None:
+            if self.result is not None:
                 return
-            roles = {"language": 0, "connector": 0, "vision": 0, "adapter": 0}
-            invalid = []
-            for name, parameter in model.named_parameters():
-                if parameter.grad is None:
-                    continue
-                role = parameter_role(name)
-                roles[role] = roles.get(role, 0) + int(parameter.numel())
-                if self.stage == "grounder" and role != "adapter":
-                    invalid.append(name)
-            if invalid:
-                raise RuntimeError("Grounder backbone received gradients: " + ", ".join(invalid[:8]))
-            required = ("language", "connector", "vision") if self.stage == "planner" else ("adapter",)
-            missing = [role for role in required if roles.get(role, 0) == 0]
-            if missing:
-                raise RuntimeError(f"no first-step gradients for parameter roles: {missing}")
-            self.result = {"step": int(state.global_step), "gradient_parameters_by_role": roles}
+            self.result = self.tracker.audit(int(state.global_step))
 
-    gradient_audit = GradientAuditCallback(workflow.stage)
+        def on_train_end(self, args, state, control, **kwargs):
+            self.tracker.close()
+
+    gradient_audit = GradientAuditCallback(workflow.stage, backend_model.named_parameters())
     rates = LearningRates(
         language=float(workflow.language_learning_rate),
         connector=float(workflow.connector_learning_rate),

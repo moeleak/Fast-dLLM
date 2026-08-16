@@ -17,6 +17,7 @@ from fast_dvlm.gui_finetune.metrics import (
 from fast_dvlm.gui_finetune.runtime import engine_arguments
 from fast_dvlm.gui_finetune.training import (
     EXPECTED_LORA_PARAMETERS,
+    GradientRoleTracker,
     LearningRates,
     audit_parameters,
     balance_weights,
@@ -50,6 +51,24 @@ class GuiContractsTest(unittest.TestCase):
     class TextTokenizer:
         def apply_chat_template(self):
             return None
+
+    class HookParameter(Parameter):
+        def __init__(self, count: int, requires_grad: bool):
+            super().__init__(count, requires_grad)
+            self.hook = None
+
+        def register_hook(self, hook):
+            self.hook = hook
+
+            class Handle:
+                def remove(inner_self):
+                    self.hook = None
+
+            return Handle()
+
+        def emit_gradient(self):
+            if self.hook is not None:
+                self.hook(object())
 
     def test_resource_waiter_is_fail_closed(self):
         root = Path(__file__).resolve().parents[2]
@@ -152,6 +171,24 @@ class GuiContractsTest(unittest.TestCase):
         text = entrypoint.read_text(encoding="utf-8")
         self.assertIn("Qwen2_5_VLProcessor.from_pretrained", text)
         self.assertIn("use_fast=False", text)
+
+    def test_gradient_tracker_captures_before_zero_partitions_gradients(self):
+        parameters = [
+            ("model.layers.0.weight", self.HookParameter(11, True)),
+            ("model.visual.blocks.0.weight", self.HookParameter(13, True)),
+            ("model.visual.merger.weight", self.HookParameter(17, True)),
+        ]
+        tracker = GradientRoleTracker("planner")
+        tracker.attach(parameters)
+        for _, parameter in parameters:
+            parameter.emit_gradient()
+        audit = tracker.audit(step=0)
+        self.assertEqual(
+            audit["gradient_parameters_by_role"],
+            {"language": 11, "connector": 17, "vision": 13, "adapter": 0},
+        )
+        self.assertEqual(audit["capture"], "backward_hooks_before_zero_partition")
+        tracker.close()
 
     def test_stage_recipes(self):
         validate_stage_hyperparameters(

@@ -31,6 +31,59 @@ class LearningRates:
     vision: float
 
 
+class GradientRoleTracker:
+    """Record first-step gradients at backward-hook time under ZeRO."""
+
+    def __init__(self, stage: str):
+        self.stage = stage
+        self.roles = {"language": 0, "connector": 0, "vision": 0, "adapter": 0}
+        self.invalid: list[str] = []
+        self.seen: set[str] = set()
+        self.handles: list[Any] = []
+
+    def attach(self, named_parameters: Iterable[tuple[str, Any]]) -> None:
+        for name, parameter in named_parameters:
+            if not parameter.requires_grad:
+                continue
+
+            def record(gradient, *, parameter_name=name, value=parameter):
+                if gradient is None or parameter_name in self.seen:
+                    return None
+                self.seen.add(parameter_name)
+                role = parameter_role(parameter_name)
+                self.roles[role] = self.roles.get(role, 0) + int(value.numel())
+                if self.stage == "grounder" and role != "adapter":
+                    self.invalid.append(parameter_name)
+                return None
+
+            self.handles.append(parameter.register_hook(record))
+
+    def audit(self, step: int) -> dict[str, Any]:
+        if self.invalid:
+            raise RuntimeError(
+                "Grounder backbone received gradients: " + ", ".join(self.invalid[:8])
+            )
+        required = (
+            ("language", "connector", "vision")
+            if self.stage == "planner"
+            else ("adapter",)
+        )
+        missing = [role for role in required if self.roles.get(role, 0) == 0]
+        if missing:
+            raise RuntimeError(f"no first-step gradients for parameter roles: {missing}")
+        return {
+            "step": int(step),
+            "gradient_parameters_by_role": dict(self.roles),
+            "gradient_parameter_tensors": len(self.seen),
+            "capture": "backward_hooks_before_zero_partition",
+        }
+
+    def close(self) -> None:
+        for handle in self.handles:
+            handle.remove()
+        self.handles.clear()
+
+
 def processor_artifact_source(model_path: str, tokenizer_name: str | None) -> str:
     """Keep checkpoint weights separate from the shared processor artifacts."""
 
