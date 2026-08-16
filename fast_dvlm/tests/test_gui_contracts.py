@@ -47,6 +47,17 @@ class GuiContractsTest(unittest.TestCase):
         self.assertIn('minimum_gpu_mib="${MINIMUM_GPU_FREE_MIB:-71680}"', text)
         self.assertIn('minimum_disk_gib="${MINIMUM_DISK_GIB:-300}"', text)
 
+    def test_pipeline_gates_final_test_on_shared_runtime(self):
+        root = Path(__file__).resolve().parents[2]
+        pipeline = root / "fast_dvlm" / "train_scripts" / "run_gui_pipeline.sh"
+        text = pipeline.read_text(encoding="utf-8")
+        runtime_gate = text.index("verify_shared_runtime.py")
+        heldout_comment = text.index("The held-out test set is touched exactly once")
+        final_eval = text.index('final_predictions="${work_root}/final/mind2web-ocr-test100"')
+        self.assertLess(runtime_gate, heldout_comment)
+        self.assertLess(heldout_comment, final_eval)
+        self.assertIn('--shared-runtime-audit "${shared_runtime_audit}"', text)
+
     def test_completed_evaluation_is_reused_without_worker_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "evaluation"

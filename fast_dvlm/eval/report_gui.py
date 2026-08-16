@@ -51,6 +51,7 @@ def main() -> None:
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--adapter-dir", type=Path, required=True)
     parser.add_argument("--gpu-memory-audit", type=Path, required=True)
+    parser.add_argument("--shared-runtime-audit", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     planner = json.loads(args.planner_selection.read_text(encoding="utf-8"))["selected"]
@@ -59,6 +60,11 @@ def main() -> None:
     score = json.loads(args.final_score.read_text(encoding="utf-8"))
     metrics = score["metrics"]
     memory = json.loads(args.gpu_memory_audit.read_text(encoding="utf-8"))
+    shared_runtime = json.loads(args.shared_runtime_audit.read_text(encoding="utf-8"))
+    if not shared_runtime.get("one_backbone") or not shared_runtime.get(
+        "planner_output_restored"
+    ):
+        raise RuntimeError("shared Planner/Grounder runtime audit did not pass")
     mean = float(metrics["latency_seconds"]["mean"])
     candidate = {
         "model": "Fast-dVLM 3B full Planner + residual LoRA",
@@ -80,6 +86,10 @@ def main() -> None:
         "backbone_size_bytes": directory_size(args.model_dir),
         "adapter_size_bytes": directory_size(args.adapter_dir),
         "peak_gpu_memory_used_mib": memory["peak_memory_used_mib"],
+        "shared_runtime": {
+            "one_backbone": True,
+            "planner_output_restored": True,
+        },
         "speedup_vs_8b": 1.282 / mean,
         "target_pass": bool(
             metrics["ssr_point_only"] >= 0.78

@@ -264,12 +264,16 @@ nohup bash fast_dvlm/train_scripts/wait_and_run_gui_pipeline.sh \
 
 The pipeline selects Planner checkpoints at steps 813/1626, selects Grounder
 checkpoints at 1033/2066/3099 on two independent validation-100 sets, then
-selects MDM versus speculative decoding on validation. Only after all choices
-are frozen does it run the ordered OCR-aligned Mind2Web test-100 once, with two
-persistent one-GPU workers handling 50 samples each. OCR is not run during
-inference; the benchmark consumes the pre-generated OCR-aligned crop and SSR
-annotation. `final/comparison.json` records quality, mean/p50/p95 latency,
-weights, peak GPU memory, and the fixed baselines.
+selects MDM versus speculative decoding on validation. Before touching the
+held-out set it runs a shared-runtime gate on validation data: Planner with
+LoRA disabled, Grounder with the pinned LoRA enabled, then Planner disabled
+again, all through one engine object; the two Planner outputs must match.
+Only after all choices and that gate are frozen does it run the ordered
+OCR-aligned Mind2Web test-100 once, with two persistent one-GPU workers
+handling 50 samples each. OCR is not run during inference; the benchmark
+consumes the pre-generated OCR-aligned crop and SSR annotation.
+`final/comparison.json` records quality, mean/p50/p95 latency, weights, peak
+GPU memory, the shared-runtime audit, and the fixed baselines.
 
 ## Evaluation (VLMEvalKit)
 

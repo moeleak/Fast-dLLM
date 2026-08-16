@@ -156,6 +156,47 @@ python3 "${eval_dir}/select_inference.py" --candidate "${mdm_candidate}" \
   --candidate "${spec_candidate}" --output "${inference_selection}"
 algorithm="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["selected"]["algorithm"])' "${inference_selection}")"
 
+# Prove on validation data that Planner and Grounder share one resident model
+# object and that disabling the pinned adapter restores the Planner output.
+shared_runtime_audit="${work_root}/validation/shared-runtime-audit.json"
+if [[ -f "${shared_runtime_audit}" ]]; then
+  python3 - "${shared_runtime_audit}" <<'PY'
+import json
+import sys
+value = json.load(open(sys.argv[1], encoding="utf-8"))
+if not value.get("one_backbone") or not value.get("planner_output_restored"):
+    raise SystemExit("existing shared runtime audit is invalid")
+print("Reusing authenticated shared runtime audit")
+PY
+else
+  mapfile -t shared_runtime_gpu_free < <(
+    nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits | head -2
+  )
+  if [[ "${#shared_runtime_gpu_free[@]}" -ne 2 ]]; then
+    echo "shared runtime audit requires exactly two visible GPUs" >&2
+    exit 75
+  fi
+  for mib in "${shared_runtime_gpu_free[@]}"; do
+    if (( mib < 71680 )); then
+      echo "shared runtime audit requires both GPUs to remain at least 70 GiB free" >&2
+      exit 75
+    fi
+  done
+  shared_runtime_image="$(python3 - "${mind2web_validation}" "${mind2web_validation_key}" <<'PY'
+import sys
+from pathlib import Path
+from fast_dvlm.gui_finetune.data import load_benchmark_rows
+root = Path(sys.argv[1]).resolve()
+rows, _ = load_benchmark_rows(root, sys.argv[2])
+print((root / rows[0]["image"]).resolve())
+PY
+)"
+  CUDA_VISIBLE_DEVICES=0 python3 "${eval_dir}/verify_shared_runtime.py" \
+    --model-path "${planner_backbone}" --adapter-path "${grounder_adapter}" \
+    --processor-path "${planner_output}" --image "${shared_runtime_image}" \
+    --algorithm "${algorithm}" --output "${shared_runtime_audit}"
+fi
+
 # The held-out test set is touched exactly once, after all checkpoint and
 # inference choices are frozen on validation.
 final_predictions="${work_root}/final/mind2web-ocr-test100"
@@ -170,4 +211,5 @@ python3 "${eval_dir}/report_gui.py" --planner-selection "${planner_selection}" \
   --final-score "${final_score}" --model-dir "${planner_backbone}" \
   --adapter-dir "${grounder_adapter}" \
   --gpu-memory-audit "${final_predictions}/gpu-memory-audit.json" \
+  --shared-runtime-audit "${shared_runtime_audit}" \
   --output "${work_root}/final/comparison.json"
