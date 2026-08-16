@@ -390,7 +390,11 @@ def convert_grounder_dataset(
     output_dir: Path,
     *,
     expected_counts: Mapping[str, int] | None = GROUNDER_EXPECTED_COUNTS,
-    heldout_benchmarks: Mapping[str, tuple[Path, str]] | None = None,
+    heldout_benchmarks: Mapping[
+        str,
+        tuple[Path, str] | tuple[Path, str, int],
+    ]
+    | None = None,
 ) -> dict[str, Any]:
     """Extract embedded images and create one two-domain Grounder dataset."""
 
@@ -458,8 +462,22 @@ def convert_grounder_dataset(
 
     heldout_audit: dict[str, Any] = {}
     heldout_ids: dict[str, set[str]] = {}
-    for name, (root, benchmark) in (heldout_benchmarks or {}).items():
+    for name, specification in (heldout_benchmarks or {}).items():
+        root, benchmark = specification[:2]
+        limit = specification[2] if len(specification) == 3 else None
         rows, benchmark_audit = load_benchmark_rows(root, benchmark)
+        if limit is not None:
+            if not 1 <= int(limit) <= len(rows):
+                raise ValueError(f"held-out benchmark limit is invalid: {name}={limit}")
+            rows = rows[: int(limit)]
+            benchmark_audit = {
+                **benchmark_audit,
+                "manifest_count": benchmark_audit["count"],
+                "count": len(rows),
+                "selection": "ordered_prefix",
+                "selection_limit": int(limit),
+                "sample_ids_sha256": sha256_values(str(row["sample_id"]) for row in rows),
+            }
         ids = [str(row["sample_id"]) for row in rows]
         overlap = seen_ids & set(ids)
         if overlap:

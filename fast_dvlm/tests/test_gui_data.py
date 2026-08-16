@@ -161,6 +161,66 @@ class GuiDataTest(unittest.TestCase):
             self.assertEqual({row["_gui_domain"] for row in rows}, {"mind2web", "mobile"})
             self.assertEqual(audit["sampling"], "domain_balanced_with_replacement")
 
+    def test_grounder_leakage_uses_the_declared_test_prefix(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = {}
+            for domain in ("mind2web", "mobile"):
+                directory = root / domain
+                directory.mkdir()
+                sources[domain] = directory
+                table = pa.Table.from_pylist(
+                    [
+                        {
+                            "sample_id": f"{domain}-train",
+                            "source": domain,
+                            "image": {"bytes": b"\x89PNG\r\n\x1a\nfixture", "path": "x.png"},
+                            "conversations": [
+                                {"from": "human", "value": "<image>\nClick on X."},
+                                {"from": "gpt", "value": "lclick [1,2,3,4]"},
+                            ],
+                            "metadata": "{}",
+                        }
+                    ]
+                )
+                pq.write_table(table, directory / "part.parquet")
+
+            heldout = root / "heldout"
+            heldout.mkdir()
+            data_path = heldout / "samples.jsonl"
+            data_path.write_text(
+                "".join(
+                    json.dumps({"sample_id": sample_id}) + "\n"
+                    for sample_id in ("test-only", "mind2web-train")
+                ),
+                encoding="utf-8",
+            )
+            (heldout / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "benchmarks": {
+                            "test": {
+                                "path": data_path.name,
+                                "rows": 2,
+                                "sha256": sha256_file(data_path),
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            audit = convert_grounder_dataset(
+                sources["mind2web"],
+                sources["mobile"],
+                root / "out",
+                expected_counts={"mind2web": 1, "mobile": 1},
+                heldout_benchmarks={"test": (heldout, "test", 1)},
+            )
+            test_audit = audit["heldout_benchmarks"]["test"]
+            self.assertEqual(test_audit["manifest_count"], 2)
+            self.assertEqual(test_audit["count"], 1)
+            self.assertEqual(test_audit["selection"], "ordered_prefix")
+
 
 if __name__ == "__main__":
     unittest.main()

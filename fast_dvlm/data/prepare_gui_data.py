@@ -43,6 +43,7 @@ def parse_args() -> argparse.Namespace:
     for name in ("mind2web-validation", "mobile-validation", "mind2web-test"):
         grounder.add_argument(f"--{name}-root", type=Path)
         grounder.add_argument(f"--{name}-key")
+    grounder.add_argument("--mind2web-test-limit", type=int, default=100)
     return parser.parse_args()
 
 
@@ -66,7 +67,11 @@ def main() -> None:
             if (root is None) != (key is None):
                 raise ValueError(f"--{name.replace('_', '-')}-root/key must be supplied together")
             if root is not None:
-                heldout[name] = (root, key)
+                heldout[name] = (
+                    (root, key, args.mind2web_test_limit)
+                    if name == "mind2web_test"
+                    else (root, key)
+                )
         audit = convert_grounder_dataset(
             args.mind2web_dir,
             args.mobile_dir,
