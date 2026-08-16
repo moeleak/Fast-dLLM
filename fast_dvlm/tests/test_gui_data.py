@@ -217,6 +217,9 @@ class GuiDataTest(unittest.TestCase):
                 heldout_benchmarks={"test": (heldout, "test", 1)},
             )
             test_audit = audit["heldout_benchmarks"]["test"]
+            training_rows = json.loads((root / "out" / "train.json").read_text())
+            self.assertEqual(audit["total_count"], 2)
+            self.assertEqual(len(training_rows), 2)
             self.assertEqual(test_audit["manifest_count"], 2)
             self.assertEqual(test_audit["count"], 1)
             self.assertEqual(test_audit["selection"], "ordered_prefix")
