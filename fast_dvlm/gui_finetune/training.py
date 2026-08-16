@@ -31,6 +31,12 @@ class LearningRates:
     vision: float
 
 
+def processor_artifact_source(model_path: str, tokenizer_name: str | None) -> str:
+    """Keep checkpoint weights separate from the shared processor artifacts."""
+
+    return tokenizer_name or model_path
+
+
 def parameter_role(name: str) -> str:
     lowered = name.lower()
     if "lora_" in lowered:

@@ -23,6 +23,7 @@ from fast_dvlm.gui_finetune.training import (
     exact_balanced_epoch_indices,
     expected_epoch_samples,
     learning_rate_for,
+    processor_artifact_source,
     validate_stage_hyperparameters,
 )
 
@@ -97,6 +98,11 @@ class GuiContractsTest(unittest.TestCase):
             indices,
             exact_balanced_epoch_indices(keys, epoch_samples=8, seed=43),
         )
+        self.assertEqual(
+            processor_artifact_source("/planner/checkpoint-813", "/planner"),
+            "/planner",
+        )
+        self.assertEqual(processor_artifact_source("base", None), "base")
 
     def test_stage_recipes(self):
         validate_stage_hyperparameters(

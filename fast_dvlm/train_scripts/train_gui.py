@@ -34,6 +34,7 @@ from fast_dvlm.gui_finetune.training import (
     expected_epoch_samples,
     learning_rate_for,
     parameter_role,
+    processor_artifact_source,
     validate_stage_hyperparameters,
 )
 
@@ -171,9 +172,13 @@ def main() -> None:
         for parameter in backend_model.parameters():
             parameter.requires_grad_(True)
 
-    processor = AutoProcessor.from_pretrained(
+    processor_source = processor_artifact_source(
         model_args.model_name_or_path,
-        revision=model_args.model_revision if model_args.model_name_or_path == FAST_DVLM_MODEL else None,
+        model_args.tokenizer_name,
+    )
+    processor = AutoProcessor.from_pretrained(
+        processor_source,
+        revision=model_args.model_revision if processor_source == FAST_DVLM_MODEL else None,
         trust_remote_code=True,
         max_pixels=workflow.max_pixels,
     )
@@ -422,6 +427,7 @@ def main() -> None:
         "model_revision": model_args.model_revision,
         "model_artifacts": local_model_manifest(Path(model_args.model_name_or_path)),
         "tokenizer": model_args.tokenizer_name,
+        "processor": processor_source,
         "code": _code_revision(),
         "mask_token_id": mask_id,
         "native_objective": {"mdm": True, "block_size": 32, "causal_auxiliary": True},
