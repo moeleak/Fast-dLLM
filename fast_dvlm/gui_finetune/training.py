@@ -19,6 +19,7 @@ EXPECTED_TEXT_LAYERS = 36
 EXPECTED_LORA_MODULES = EXPECTED_TEXT_LAYERS * 4
 EXPECTED_LORA_PARAMETERS = 14_745_600
 LORA_TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj")
+EXPECTED_OPTIMIZER_STEPS = {"planner": 1_626, "grounder": 3_099}
 RESUME_MAX_ABS_TOLERANCE = 5e-6
 RESUME_RELATIVE_L2_TOLERANCE = 5e-7
 RESUME_MISMATCHED_FRACTION_TOLERANCE = 1e-4
@@ -476,3 +477,40 @@ def validate_preflight_stop_step(
             "preflight stop step must be positive and strictly below max_steps; "
             f"got stop={stop_after_steps}, max_steps={max_steps}"
         )
+
+
+def audit_training_schedule(
+    stage: str,
+    *,
+    state_max_steps: int,
+    world_size: int,
+    per_device_batch_size: int,
+    gradient_accumulation_steps: int,
+    allow_recipe_override: bool,
+    requested_max_steps: int,
+) -> dict[str, int]:
+    """Fail before training when data sharding changes the advertised recipe."""
+
+    expected_steps = (
+        requested_max_steps if allow_recipe_override else EXPECTED_OPTIMIZER_STEPS[stage]
+    )
+    global_batch_size = (
+        world_size * per_device_batch_size * gradient_accumulation_steps
+    )
+    if state_max_steps != expected_steps:
+        raise RuntimeError(
+            f"{stage} schedule resolved to {state_max_steps} optimizer steps; "
+            f"expected {expected_steps}"
+        )
+    if world_size != 2 or global_batch_size != 16:
+        raise RuntimeError(
+            f"{stage} schedule resolved to world_size={world_size}, "
+            f"global_batch_size={global_batch_size}; expected 2 and 16"
+        )
+    return {
+        "optimizer_steps": state_max_steps,
+        "world_size": world_size,
+        "per_device_batch_size": per_device_batch_size,
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "global_batch_size": global_batch_size,
+    }

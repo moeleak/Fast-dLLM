@@ -33,6 +33,7 @@ from fast_dvlm.gui_finetune.training import (
     GradientRoleTracker,
     LORA_TARGETS,
     LearningRates,
+    audit_training_schedule,
     audit_parameters,
     audit_zero_delta,
     balance_weights,
@@ -322,6 +323,21 @@ def main() -> None:
         def on_train_end(self, args, state, control, **kwargs):
             self.tracker.close()
 
+    class TrainingScheduleAuditCallback(TrainerCallback):
+        def __init__(self):
+            self.result = None
+
+        def on_train_begin(self, args, state, control, **kwargs):
+            self.result = audit_training_schedule(
+                workflow.stage,
+                state_max_steps=int(state.max_steps),
+                world_size=int(args.world_size),
+                per_device_batch_size=int(args.per_device_train_batch_size),
+                gradient_accumulation_steps=int(args.gradient_accumulation_steps),
+                allow_recipe_override=workflow.allow_recipe_override,
+                requested_max_steps=int(args.max_steps),
+            )
+
     class PreflightStopCallback(TrainerCallback):
         def on_step_end(self, args, state, control, **kwargs):
             if (
@@ -333,6 +349,7 @@ def main() -> None:
             return control
 
     gradient_audit = GradientAuditCallback(workflow.stage, backend_model.named_parameters())
+    schedule_audit = TrainingScheduleAuditCallback()
     rates = LearningRates(
         language=float(workflow.language_learning_rate),
         connector=float(workflow.connector_learning_rate),
@@ -355,8 +372,11 @@ def main() -> None:
             return DistributedWeightedSampler(
                 weights,
                 exact_group_keys=keys if workflow.stage == "grounder" else None,
-                replicas=max(1, int(self.args.world_size)),
-                rank=int(self.args.process_index),
+                # Accelerator shards the prepared DataLoader across ranks. The
+                # sampler must expose the same deterministic global sequence on
+                # every rank or the dataset is divided by world_size twice.
+                replicas=1,
+                rank=0,
                 seed=int(self.args.seed),
                 epoch_samples=int(expected_epoch_samples(workflow.stage, source_audit)),
             )
@@ -457,7 +477,7 @@ def main() -> None:
         train_dataset=dataset.get_backend_dataset(),
         tokenizer=model.tokenizer,
         data_collator=data_collator,
-        callbacks=[gradient_audit, PreflightStopCallback()],
+        callbacks=[gradient_audit, schedule_audit, PreflightStopCallback()],
     )
     resume = training_args.resume_from_checkpoint
     if resume is None:
@@ -500,6 +520,7 @@ def main() -> None:
         "parameters": parameter_audit,
         "zero_delta": zero_delta_audit,
         "optimizer_groups": getattr(trainer, "optimizer_group_audit", []),
+        "training_schedule": schedule_audit.result,
         "first_step_gradients": gradient_audit.result,
         "recipe": {
             **recipe_values,

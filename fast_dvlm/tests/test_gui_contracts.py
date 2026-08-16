@@ -19,6 +19,7 @@ from fast_dvlm.gui_finetune.training import (
     EXPECTED_LORA_PARAMETERS,
     GradientRoleTracker,
     LearningRates,
+    audit_training_schedule,
     audit_parameters,
     balance_weights,
     exact_balanced_epoch_indices,
@@ -235,6 +236,37 @@ class GuiContractsTest(unittest.TestCase):
         self.assertIn("RECIPE_SMOKE_STOP_AFTER_STEPS=1", script)
         self.assertIn("compare_saved_model_weights", script)
         self.assertIn('result["accepted"]', script)
+
+    def test_schedule_requires_one_accelerate_shard_and_exact_steps(self):
+        self.assertEqual(
+            audit_training_schedule(
+                "planner",
+                state_max_steps=1626,
+                world_size=2,
+                per_device_batch_size=1,
+                gradient_accumulation_steps=8,
+                allow_recipe_override=False,
+                requested_max_steps=-1,
+            )["global_batch_size"],
+            16,
+        )
+        with self.assertRaisesRegex(RuntimeError, "resolved to 814"):
+            audit_training_schedule(
+                "planner",
+                state_max_steps=814,
+                world_size=2,
+                per_device_batch_size=1,
+                gradient_accumulation_steps=8,
+                allow_recipe_override=False,
+                requested_max_steps=-1,
+            )
+        root = Path(__file__).resolve().parents[2]
+        entrypoint = (
+            root / "fast_dvlm" / "train_scripts" / "train_gui.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Accelerator shards the prepared DataLoader", entrypoint)
+        self.assertIn("replicas=1", entrypoint)
+        self.assertIn("rank=0", entrypoint)
 
     def test_metrics_and_selection(self):
         parsed = parse_grounding_action("lclick [100, 100, 200, 200]")
