@@ -42,6 +42,7 @@ from fast_dvlm.gui_finetune.training import (
     parameter_role,
     processor_artifact_source,
     validate_multimodal_processor,
+    validate_preflight_stop_step,
     validate_stage_hyperparameters,
 )
 
@@ -59,6 +60,7 @@ class GuiWorkflowArguments:
     balance_power: Optional[float] = None
     allow_recipe_override: bool = False
     expected_lora_modules: int = EXPECTED_LORA_MODULES
+    preflight_stop_after_steps: Optional[int] = None
 
 
 def _atomic_json(path: Path, value: Any) -> None:
@@ -161,6 +163,11 @@ def main() -> None:
     }
     if not workflow.allow_recipe_override:
         validate_stage_hyperparameters(workflow.stage, recipe_values)
+    validate_preflight_stop_step(
+        workflow.preflight_stop_after_steps,
+        max_steps=int(training_args.max_steps),
+        allow_recipe_override=workflow.allow_recipe_override,
+    )
     if float(training_args.num_train_epochs) != expected_epochs and not workflow.allow_recipe_override:
         raise ValueError("unexpected epoch count")
     if not 0.0 <= workflow.min_lr_ratio <= 1.0:
@@ -315,6 +322,16 @@ def main() -> None:
         def on_train_end(self, args, state, control, **kwargs):
             self.tracker.close()
 
+    class PreflightStopCallback(TrainerCallback):
+        def on_step_end(self, args, state, control, **kwargs):
+            if (
+                workflow.preflight_stop_after_steps is not None
+                and int(state.global_step) >= workflow.preflight_stop_after_steps
+            ):
+                control.should_save = True
+                control.should_training_stop = True
+            return control
+
     gradient_audit = GradientAuditCallback(workflow.stage, backend_model.named_parameters())
     rates = LearningRates(
         language=float(workflow.language_learning_rate),
@@ -440,7 +457,7 @@ def main() -> None:
         train_dataset=dataset.get_backend_dataset(),
         tokenizer=model.tokenizer,
         data_collator=data_collator,
-        callbacks=[gradient_audit],
+        callbacks=[gradient_audit, PreflightStopCallback()],
     )
     resume = training_args.resume_from_checkpoint
     if resume is None:
@@ -496,6 +513,7 @@ def main() -> None:
             "balance_power": float(workflow.balance_power),
             "max_pixels": int(workflow.max_pixels),
             "deepspeed": str(training_args.deepspeed),
+            "preflight_stop_after_steps": workflow.preflight_stop_after_steps,
         },
         "resume_from_checkpoint": resume,
         "train_metrics": result.metrics,

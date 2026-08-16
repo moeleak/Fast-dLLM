@@ -66,11 +66,15 @@ PY
     fi
   fi
 
-  resume_dir="${output_dir}-preflight-zero${zero_stage}-resume"
+  resume_dir="${output_dir}-preflight-zero${zero_stage}-resume-schedule-v2"
   mkdir -p "${resume_dir}"
   if [[ ! -f "${resume_dir}/resume-consistency.json" ]]; then
+    # Build the exact same two-step scheduler as the uninterrupted control,
+    # but stop after step one. Changing max_steps to one changes warmup/cosine
+    # state and makes the resume comparison invalid.
     OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
-      RECIPE_SMOKE_STEPS=1 RECIPE_SMOKE_SAVE_STEPS=1 \
+      RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
+      RECIPE_SMOKE_STOP_AFTER_STEPS=1 \
       bash "${script_dir}/run_gui_stage.sh"
     OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
       RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
@@ -90,10 +94,14 @@ def files(root):
         )
     if not candidates:
         raise SystemExit(f"no saved model weights in {root}")
-    return {
-        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-        for path in candidates
-    }
+    result = {}
+    for path in candidates:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                digest.update(chunk)
+        result[path.name] = digest.hexdigest()
+    return result
 
 left, right = files(sys.argv[1]), files(sys.argv[2])
 result = {"schema_version": 1, "uninterrupted": left, "resumed": right, "identical": left == right}

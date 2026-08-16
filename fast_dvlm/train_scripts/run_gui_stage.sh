@@ -76,6 +76,11 @@ if [[ "${RECIPE_SMOKE:-0}" == 1 ]]; then
   max_steps="${RECIPE_SMOKE_STEPS:-2}"
   save_steps="${RECIPE_SMOKE_SAVE_STEPS:-${max_steps}}"
   recipe_override_args=(--allow_recipe_override true)
+  if [[ -n "${RECIPE_SMOKE_STOP_AFTER_STEPS:-}" ]]; then
+    recipe_override_args+=(
+      --preflight_stop_after_steps "${RECIPE_SMOKE_STOP_AFTER_STEPS}"
+    )
+  fi
 fi
 
 resume_args=()

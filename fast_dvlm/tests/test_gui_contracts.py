@@ -26,6 +26,7 @@ from fast_dvlm.gui_finetune.training import (
     learning_rate_for,
     processor_artifact_source,
     validate_multimodal_processor,
+    validate_preflight_stop_step,
     validate_stage_hyperparameters,
 )
 
@@ -204,6 +205,34 @@ class GuiContractsTest(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             validate_stage_hyperparameters("planner", {"num_train_epochs": 1})
+
+    def test_resume_smoke_keeps_the_uninterrupted_scheduler(self):
+        validate_preflight_stop_step(
+            1,
+            max_steps=2,
+            allow_recipe_override=True,
+        )
+        with self.assertRaises(ValueError):
+            validate_preflight_stop_step(
+                1,
+                max_steps=1,
+                allow_recipe_override=True,
+            )
+        with self.assertRaises(ValueError):
+            validate_preflight_stop_step(
+                1,
+                max_steps=2,
+                allow_recipe_override=False,
+            )
+        root = Path(__file__).resolve().parents[2]
+        script = (
+            root
+            / "fast_dvlm"
+            / "train_scripts"
+            / "run_gui_stage_with_preflight.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn("RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1", script)
+        self.assertIn("RECIPE_SMOKE_STOP_AFTER_STEPS=1", script)
 
     def test_metrics_and_selection(self):
         parsed = parse_grounding_action("lclick [100, 100, 200, 200]")

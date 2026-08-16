@@ -325,3 +325,22 @@ def validate_stage_hyperparameters(stage: str, values: Mapping[str, Any]) -> Non
             mismatches.append(f"{key}={actual!r} (expected {wanted!r})")
     if mismatches:
         raise ValueError(f"{stage} hyperparameter contract mismatch: " + "; ".join(mismatches))
+
+
+def validate_preflight_stop_step(
+    stop_after_steps: int | None,
+    *,
+    max_steps: int,
+    allow_recipe_override: bool,
+) -> None:
+    """Keep resume smoke scheduling identical to its uninterrupted control."""
+
+    if stop_after_steps is None:
+        return
+    if not allow_recipe_override:
+        raise ValueError("--preflight_stop_after_steps is only valid for recipe smoke runs")
+    if max_steps <= 1 or not 0 < stop_after_steps < max_steps:
+        raise ValueError(
+            "preflight stop step must be positive and strictly below max_steps; "
+            f"got stop={stop_after_steps}, max_steps={max_steps}"
+        )
