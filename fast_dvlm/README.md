@@ -246,6 +246,22 @@ MIND2WEB_TEST_KEY=mind2web_test \
 bash fast_dvlm/train_scripts/run_gui_pipeline.sh
 ```
 
+On a shared node, use the resource-gated wrapper instead of polling and
+launching by hand. It holds a per-experiment lock, requires a clean Git tree,
+and starts only when both GPUs have at least 70 GiB free and the experiment
+filesystem has at least 300 GiB free. Exit status 75 means another job won the
+GPU reservation race, so only that status returns to the wait loop; every
+other failure remains fail-closed.
+
+```bash
+WORK_ROOT=/new/unique/experiment \
+FAST_DVLM_ENV=/path/to/fast-dvlm-env \
+MIND2WEB_TEST=/path/to/fixed-ocr-test100 \
+MIND2WEB_TEST_KEY=mind2web_test \
+nohup bash fast_dvlm/train_scripts/wait_and_run_gui_pipeline.sh \
+  > /new/unique/experiment/pipeline.log 2>&1 < /dev/null &
+```
+
 The pipeline selects Planner checkpoints at steps 813/1626, selects Grounder
 checkpoints at 1033/2066/3099 on two independent validation-100 sets, then
 selects MDM versus speculative decoding on validation. Only after all choices

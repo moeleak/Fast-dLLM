@@ -37,6 +37,16 @@ class GuiContractsTest(unittest.TestCase):
         def numel(self):
             return self.count
 
+    def test_resource_waiter_is_fail_closed(self):
+        root = Path(__file__).resolve().parents[2]
+        script = root / "fast_dvlm" / "train_scripts" / "wait_and_run_gui_pipeline.sh"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn('git -C "${repo_root}" status --porcelain', text)
+        self.assertIn("flock -n 9", text)
+        self.assertIn("if (( status == 75 ))", text)
+        self.assertIn('minimum_gpu_mib="${MINIMUM_GPU_FREE_MIB:-71680}"', text)
+        self.assertIn('minimum_disk_gib="${MINIMUM_DISK_GIB:-300}"', text)
+
     def test_completed_evaluation_is_reused_without_worker_launch(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "evaluation"
