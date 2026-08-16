@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 import re
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 
@@ -17,6 +19,9 @@ EXPECTED_TEXT_LAYERS = 36
 EXPECTED_LORA_MODULES = EXPECTED_TEXT_LAYERS * 4
 EXPECTED_LORA_PARAMETERS = 14_745_600
 LORA_TARGETS = ("q_proj", "k_proj", "v_proj", "o_proj")
+RESUME_MAX_ABS_TOLERANCE = 5e-6
+RESUME_RELATIVE_L2_TOLERANCE = 5e-7
+RESUME_MISMATCHED_FRACTION_TOLERANCE = 1e-4
 
 _TEXT_LORA_RE = re.compile(
     r"(?:^|\.)(?:language_model\.(?:model\.)?|model\.)layers\."
@@ -82,6 +87,133 @@ class GradientRoleTracker:
         for handle in self.handles:
             handle.remove()
         self.handles.clear()
+
+
+def compare_saved_model_weights(left_root: Path, right_root: Path) -> dict[str, Any]:
+    """Compare resumed weights without requiring nondeterministic GPU bit identity."""
+
+    import torch
+    from safetensors import safe_open
+
+    def model_files(root: Path) -> list[Path]:
+        candidates = sorted(root.glob("*.safetensors"))
+        if not candidates:
+            candidates = sorted(
+                path for path in root.glob("*.bin") if path.name != "training_args.bin"
+            )
+        if not candidates:
+            raise RuntimeError(f"no saved model weights in {root}")
+        if any(path.suffix != ".safetensors" for path in candidates):
+            raise RuntimeError("numeric resume comparison requires safetensors weights")
+        return candidates
+
+    def digest(path: Path) -> str:
+        result = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
+                result.update(chunk)
+        return result.hexdigest()
+
+    def tensor_locations(files: Sequence[Path]) -> dict[str, Path]:
+        result: dict[str, Path] = {}
+        for path in files:
+            with safe_open(path, framework="pt", device="cpu") as handle:
+                for key in handle.keys():
+                    if key in result:
+                        raise RuntimeError(f"duplicate saved tensor: {key}")
+                    result[key] = path
+        return result
+
+    left_files = model_files(left_root)
+    right_files = model_files(right_root)
+    left_hashes = {path.name: digest(path) for path in left_files}
+    right_hashes = {path.name: digest(path) for path in right_files}
+    left_locations = tensor_locations(left_files)
+    right_locations = tensor_locations(right_files)
+    if left_locations.keys() != right_locations.keys():
+        raise RuntimeError("saved tensor key sets differ across resume smoke")
+
+    total = 0
+    mismatched = 0
+    mismatched_tensors = 0
+    nonfinite_differences = 0
+    nonfloating_mismatches = 0
+    squared_error = 0.0
+    squared_reference = 0.0
+    max_abs = 0.0
+    handles: dict[tuple[str, Path], Any] = {}
+    try:
+        for name in sorted(left_locations):
+            left_key = ("left", left_locations[name])
+            right_key = ("right", right_locations[name])
+            if left_key not in handles:
+                handles[left_key] = safe_open(
+                    left_locations[name], framework="pt", device="cpu"
+                )
+            if right_key not in handles:
+                handles[right_key] = safe_open(
+                    right_locations[name], framework="pt", device="cpu"
+                )
+            left = handles[left_key].get_tensor(name)
+            right = handles[right_key].get_tensor(name)
+            if left.shape != right.shape or left.dtype != right.dtype:
+                raise RuntimeError(f"saved tensor contract differs for {name}")
+            total += left.numel()
+            different = int(torch.count_nonzero(left != right).item())
+            mismatched += different
+            mismatched_tensors += int(different > 0)
+            if left.is_floating_point():
+                left_double = left.double()
+                squared_reference += float(torch.sum(left_double.square()).item())
+                if different:
+                    delta = left_double - right.double()
+                    finite = torch.isfinite(delta)
+                    nonfinite_differences += int(torch.count_nonzero(~finite).item())
+                    if bool(finite.any()):
+                        finite_delta = delta[finite]
+                        max_abs = max(max_abs, float(finite_delta.abs().max().item()))
+                        squared_error += float(torch.sum(finite_delta.square()).item())
+            else:
+                nonfloating_mismatches += different
+            del left, right
+    finally:
+        handles.clear()
+
+    mismatched_fraction = mismatched / total if total else 0.0
+    relative_l2 = (
+        math.sqrt(squared_error / squared_reference) if squared_reference else 0.0
+    )
+    numeric_consistent = (
+        nonfinite_differences == 0
+        and nonfloating_mismatches == 0
+        and max_abs <= RESUME_MAX_ABS_TOLERANCE
+        and relative_l2 <= RESUME_RELATIVE_L2_TOLERANCE
+        and mismatched_fraction <= RESUME_MISMATCHED_FRACTION_TOLERANCE
+    )
+    return {
+        "schema_version": 2,
+        "left": str(left_root.resolve()),
+        "right": str(right_root.resolve()),
+        "left_sha256": left_hashes,
+        "right_sha256": right_hashes,
+        "byte_identical": left_hashes == right_hashes,
+        "numeric_consistent": numeric_consistent,
+        "accepted": left_hashes == right_hashes or numeric_consistent,
+        "tensor_count": len(left_locations),
+        "elements": total,
+        "mismatched_elements": mismatched,
+        "mismatched_tensors": mismatched_tensors,
+        "mismatched_fraction": mismatched_fraction,
+        "max_abs": max_abs,
+        "relative_l2": relative_l2,
+        "nonfinite_differences": nonfinite_differences,
+        "nonfloating_mismatches": nonfloating_mismatches,
+        "tolerances": {
+            "max_abs": RESUME_MAX_ABS_TOLERANCE,
+            "relative_l2": RESUME_RELATIVE_L2_TOLERANCE,
+            "mismatched_fraction": RESUME_MISMATCHED_FRACTION_TOLERANCE,
+        },
+    }
 
 
 def processor_artifact_source(model_path: str, tokenizer_name: str | None) -> str:

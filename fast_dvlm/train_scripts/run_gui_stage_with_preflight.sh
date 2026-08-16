@@ -68,48 +68,41 @@ PY
 
   resume_dir="${output_dir}-preflight-zero${zero_stage}-resume-schedule-v2"
   mkdir -p "${resume_dir}"
-  if [[ ! -f "${resume_dir}/resume-consistency.json" ]]; then
+  resume_consistent=0
+  if [[ -f "${resume_dir}/resume-consistency.json" ]]; then
+    if python3 -c 'import json,sys; raise SystemExit(0 if json.load(open(sys.argv[1])).get("accepted") else 1)' \
+      "${resume_dir}/resume-consistency.json"
+    then
+      resume_consistent=1
+    fi
+  fi
+  if (( ! resume_consistent )); then
     # Build the exact same two-step scheduler as the uninterrupted control,
     # but stop after step one. Changing max_steps to one changes warmup/cosine
     # state and makes the resume comparison invalid.
-    OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
-      RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
-      RECIPE_SMOKE_STOP_AFTER_STEPS=1 \
-      bash "${script_dir}/run_gui_stage.sh"
-    OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
-      RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
-      bash "${script_dir}/run_gui_stage.sh"
+    if [[ ! -d "${resume_dir}/checkpoint-1" ]]; then
+      OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
+        RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
+        RECIPE_SMOKE_STOP_AFTER_STEPS=1 \
+        bash "${script_dir}/run_gui_stage.sh"
+    fi
+    if [[ ! -d "${resume_dir}/checkpoint-2" ]]; then
+      OUTPUT_DIR="${resume_dir}" ZERO_STAGE="${zero_stage}" RECIPE_SMOKE=1 \
+        RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1 \
+        bash "${script_dir}/run_gui_stage.sh"
+    fi
     python3 - "${baseline_dir}" "${resume_dir}" <<'PY'
-import hashlib
 import json
 import sys
 from pathlib import Path
+from fast_dvlm.gui_finetune.training import compare_saved_model_weights
 
-def files(root):
-    root = Path(root)
-    candidates = sorted(root.glob("*.safetensors"))
-    if not candidates:
-        candidates = sorted(
-            path for path in root.glob("*.bin") if path.name != "training_args.bin"
-        )
-    if not candidates:
-        raise SystemExit(f"no saved model weights in {root}")
-    result = {}
-    for path in candidates:
-        digest = hashlib.sha256()
-        with path.open("rb") as handle:
-            for chunk in iter(lambda: handle.read(8 * 1024 * 1024), b""):
-                digest.update(chunk)
-        result[path.name] = digest.hexdigest()
-    return result
-
-left, right = files(sys.argv[1]), files(sys.argv[2])
-result = {"schema_version": 1, "uninterrupted": left, "resumed": right, "identical": left == right}
+result = compare_saved_model_weights(Path(sys.argv[1]), Path(sys.argv[2]))
 Path(sys.argv[2], "resume-consistency.json").write_text(
     json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
 )
-if left != right:
-    raise SystemExit("2-step uninterrupted and 1+resume model weights differ")
+if not result["accepted"]:
+    raise SystemExit("2-step uninterrupted and 1+resume weights exceed numeric tolerances")
 print(json.dumps(result, sort_keys=True))
 PY
   fi

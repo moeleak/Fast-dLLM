@@ -233,6 +233,8 @@ class GuiContractsTest(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("RECIPE_SMOKE_STEPS=2 RECIPE_SMOKE_SAVE_STEPS=1", script)
         self.assertIn("RECIPE_SMOKE_STOP_AFTER_STEPS=1", script)
+        self.assertIn("compare_saved_model_weights", script)
+        self.assertIn('result["accepted"]', script)
 
     def test_metrics_and_selection(self):
         parsed = parse_grounding_action("lclick [100, 100, 200, 200]")
