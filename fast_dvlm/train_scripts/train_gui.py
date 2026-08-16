@@ -19,7 +19,12 @@ for value in (str(_REPO_ROOT), str(_THIRD_PARTY)):
     if value not in sys.path:
         sys.path.insert(0, value)
 
-from fast_dvlm.gui_finetune.data import audit_converted_training_file, local_model_manifest
+from fast_dvlm.gui_finetune.data import (
+    audit_converted_training_file,
+    local_model_manifest,
+    local_tokenizer_manifest,
+    resolve_local_artifact_root,
+)
 from fast_dvlm.gui_finetune.training import (
     EXPECTED_LORA_MODULES,
     FAST_DVLM_MASK_TOKEN_ID,
@@ -183,6 +188,38 @@ def main() -> None:
         max_pixels=workflow.max_pixels,
     )
     processor.tokenizer = model.tokenizer
+    if workflow.allow_recipe_override:
+        model_artifacts = {
+            "source": model_args.model_name_or_path,
+            "revision": model_args.model_revision,
+            "deferred_to_full_training": True,
+        }
+        tokenizer_artifacts = {
+            "source": processor_source,
+            "revision": model_args.model_revision if processor_source == FAST_DVLM_MODEL else None,
+            "deferred_to_full_training": True,
+        }
+    else:
+        model_root = resolve_local_artifact_root(
+            model_args.model_name_or_path,
+            revision=model_args.model_revision,
+            cache_dir=model_args.cache_dir,
+        )
+        processor_root = resolve_local_artifact_root(
+            processor_source,
+            revision=model_args.model_revision if processor_source == FAST_DVLM_MODEL else None,
+            cache_dir=model_args.cache_dir,
+        )
+        model_artifacts = {
+            "source": model_args.model_name_or_path,
+            "revision": model_args.model_revision,
+            **(local_model_manifest(model_root) or {}),
+        }
+        tokenizer_artifacts = {
+            "source": processor_source,
+            "revision": model_args.model_revision if processor_source == FAST_DVLM_MODEL else None,
+            **(local_tokenizer_manifest(processor_root) or {}),
+        }
     mask_id = model.tokenizer.convert_tokens_to_ids("|<MASK>|")
     if mask_id != FAST_DVLM_MASK_TOKEN_ID:
         raise RuntimeError(
@@ -425,8 +462,9 @@ def main() -> None:
         "stage": workflow.stage,
         "model": model_args.model_name_or_path,
         "model_revision": model_args.model_revision,
-        "model_artifacts": local_model_manifest(Path(model_args.model_name_or_path)),
+        "model_artifacts": model_artifacts,
         "tokenizer": model_args.tokenizer_name,
+        "tokenizer_artifacts": tokenizer_artifacts,
         "processor": processor_source,
         "code": _code_revision(),
         "mask_token_id": mask_id,

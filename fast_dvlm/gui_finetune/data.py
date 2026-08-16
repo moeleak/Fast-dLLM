@@ -39,7 +39,7 @@ def local_model_manifest(path: Path) -> dict[str, Any] | None:
 
     if not path.is_dir():
         return None
-    suffixes = {".json", ".model", ".safetensors", ".bin", ".txt"}
+    suffixes = {".json", ".model", ".safetensors", ".bin", ".txt", ".py", ".jinja"}
     files = []
     for candidate in sorted(item for item in path.rglob("*") if item.is_file()):
         relative = candidate.relative_to(path).as_posix()
@@ -56,6 +56,71 @@ def local_model_manifest(path: Path) -> dict[str, Any] | None:
         f"{item['path']}\0{item['size_bytes']}\0{item['sha256']}" for item in files
     )
     return {"root": str(path.resolve()), "files": files, "tree_sha256": digest}
+
+
+def local_tokenizer_manifest(path: Path) -> dict[str, Any] | None:
+    """Hash tokenizer/processor artifacts without rehashing model weights."""
+
+    if not path.is_dir():
+        return None
+    exact_names = {
+        "added_tokens.json",
+        "chat_template.jinja",
+        "merges.txt",
+        "preprocessor_config.json",
+        "processor_config.json",
+        "special_tokens_map.json",
+        "tokenizer.json",
+        "tokenizer.model",
+        "tokenizer_config.json",
+        "vocab.json",
+    }
+    files = []
+    for candidate in sorted(item for item in path.rglob("*") if item.is_file()):
+        relative = candidate.relative_to(path).as_posix()
+        if candidate.name not in exact_names:
+            continue
+        files.append(
+            {
+                "path": relative,
+                "size_bytes": candidate.stat().st_size,
+                "sha256": sha256_file(candidate),
+            }
+        )
+    if not files:
+        raise RuntimeError(f"no tokenizer/processor artifacts found in {path}")
+    digest = sha256_values(
+        f"{item['path']}\0{item['size_bytes']}\0{item['sha256']}" for item in files
+    )
+    return {"root": str(path.resolve()), "files": files, "tree_sha256": digest}
+
+
+def resolve_local_artifact_root(
+    source: str,
+    *,
+    revision: str | None,
+    cache_dir: str | None,
+) -> Path:
+    """Resolve a local directory or an already-downloaded Hub snapshot."""
+
+    local = Path(source)
+    if local.is_dir():
+        return local.resolve()
+    try:
+        from huggingface_hub import snapshot_download
+
+        return Path(
+            snapshot_download(
+                source,
+                revision=revision,
+                cache_dir=cache_dir,
+                local_files_only=True,
+            )
+        ).resolve()
+    except Exception as exc:
+        raise RuntimeError(
+            f"cannot resolve authenticated local artifacts for {source}@{revision}"
+        ) from exc
 
 
 def sha256_values(values: Iterable[str]) -> str:

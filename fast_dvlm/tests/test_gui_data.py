@@ -14,12 +14,30 @@ from fast_dvlm.gui_finetune.data import (
     convert_grounder_dataset,
     convert_planner_dataset,
     load_benchmark_rows,
+    local_model_manifest,
+    local_tokenizer_manifest,
     select_planner_validation_rows,
     sha256_file,
 )
 
 
 class GuiDataTest(unittest.TestCase):
+    def test_model_and_tokenizer_manifests_are_separate(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            (root / "model.safetensors").write_bytes(b"weights")
+            (root / "modeling.py").write_text("# custom code\n", encoding="utf-8")
+            (root / "tokenizer.json").write_text("{}\n", encoding="utf-8")
+            (root / "chat_template.jinja").write_text("{{ value }}\n", encoding="utf-8")
+            model = local_model_manifest(root)
+            tokenizer = local_tokenizer_manifest(root)
+            self.assertIn("model.safetensors", {item["path"] for item in model["files"]})
+            self.assertIn("modeling.py", {item["path"] for item in model["files"]})
+            self.assertEqual(
+                {item["path"] for item in tokenizer["files"]},
+                {"chat_template.jinja", "tokenizer.json"},
+            )
+
     def test_benchmark_manifest_accepts_authenticated_legacy_jsonl(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
