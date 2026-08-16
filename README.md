@@ -114,6 +114,10 @@ python run_chatbot.py
 
 **Fine-tuning (optional example):** multimodal MDM training uses DeepSpeed + the LMFlow fork under [`third_party/`](third_party/) (the launcher sets `PYTHONPATH` for you). Download [ALLaVA-4V](https://huggingface.co/datasets/FreedomIntelligence/ALLaVA-4V) with `fast_dvlm/data/download_example_dataset.sh`, then run `bash fast_dvlm/train_scripts/finetune_multimodal_example.sh` from the repo root—see [Fine-tuning (example launcher)](fast_dvlm/README.md#fine-tuning-example-launcher) in [fast_dvlm/README.md](fast_dvlm/README.md).
 
+For the audited two-stage GUI recipe (full-parameter Planner followed by a
+same-backbone residual Grounder LoRA), see [GUI Planner + residual Grounder
+workflow](fast_dvlm/README.md#gui-planner--residual-grounder-workflow).
+
 For full details, see [fast_dvlm/README.md](fast_dvlm/README.md).
 
 ### Fast-dDrive (Block-Diffusion VLA for Autonomous Driving)

@@ -167,6 +167,94 @@ Writes to `OUTPUT_DIR` (default: `Fast-dLLM/output_models/finetune_fast_dVLM_3B_
 
 MDM knobs such as **`--mdm`**, **`--bd_size`**, and **`--block_size`** are available from LMFlow **`ModelArguments` / dataset args**; add them by editing the launcher or invoking `python fast_dvlm/train_scripts/finetune_dvlm.py --help`.
 
+## GUI Planner + residual Grounder workflow
+
+The production GUI recipe is separate from the minimal ALLaVA example. It
+trains one full Fast-dVLM Planner and then a residual Grounder adapter on that
+selected Planner checkpoint. The runtime owns one SGLang engine: Planner
+requests pass no adapter, while Grounder requests enable one pinned PEFT LoRA.
+It never builds a merged checkpoint or loads a second vision tower.
+
+The base snapshot is pinned to
+`Efficient-Large-Model/Fast_dVLM_3B@d7977da26e374f3ef7c96c1700b2ebab50ff62fc`.
+The native block-diffusion objective, causal auxiliary loss, and block size 32
+are retained. A800 runs use BF16; FP8/W8A8 is intentionally disabled.
+
+### Data preparation and audits
+
+```bash
+python fast_dvlm/data/prepare_gui_data.py planner \
+  --source-dir /path/to/unigui-planner \
+  --image-root /path/to/Uni-GUI-OpenMobile \
+  --output-dir /new/experiment/data/planner
+
+python fast_dvlm/data/prepare_gui_data.py grounder \
+  --mind2web-dir /path/to/mind2web-ocr-train \
+  --mobile-dir /path/to/mobile-grounding-train \
+  --output-dir /new/experiment/data/grounder \
+  --mind2web-validation-root /path/to/mind2web-validation \
+  --mind2web-validation-key mind2web_validation \
+  --mobile-validation-root /path/to/mobile-validation \
+  --mobile-validation-key mobile_validation \
+  --mind2web-test-root /path/to/fixed-mind2web-test100 \
+  --mind2web-test-key mind2web_test
+```
+
+Preparation fails closed on source hashes/counts, missing images, malformed
+turns/actions, duplicate IDs, and train/validation/test leakage. Planner
+conversion also writes an action-stratified, SHA-256-stable
+`validation-100.json`. The first real collated batch is audited to prove that
+user tokens are masked and assistant target tokens are supervised.
+
+### Two-stage training
+
+Use a new output path. Both launchers require at least 300 GiB free disk and
+70 GiB free on each of exactly two visible GPUs. The preflight launcher runs a
+two-step gradient/save smoke and a 1+resume versus uninterrupted consistency
+check. It uses ZeRO-2 without offload unless the smoke OOMs or reserves more
+than 72 GiB, in which case it changes only to ZeRO-3 without offload.
+
+```bash
+STAGE=planner \
+DATASET_PATH=/new/experiment/data/planner/train.json \
+SOURCE_AUDIT=/new/experiment/data/planner/audit.json \
+OUTPUT_DIR=/new/experiment/training/planner \
+bash fast_dvlm/train_scripts/run_gui_stage_with_preflight.sh
+
+STAGE=grounder \
+MODEL_PATH=/new/experiment/training/planner/checkpoint-SELECTED \
+TOKENIZER_NAME=/new/experiment/training/planner \
+DATASET_PATH=/new/experiment/data/grounder/train.json \
+SOURCE_AUDIT=/new/experiment/data/grounder/audit.json \
+OUTPUT_DIR=/new/experiment/training/grounder \
+bash fast_dvlm/train_scripts/run_gui_stage_with_preflight.sh
+```
+
+Planner trains every language, vision, and connector parameter for 1,626
+optimizer steps with separate `1e-6 / 1e-7 / 2e-6` learning rates. Grounder
+freezes the selected Planner and trains rank-32, alpha-32, dropout-0.1 LoRA on
+exactly 36 × (`q_proj`, `k_proj`, `v_proj`, `o_proj`) = 144 text-attention
+modules (14,745,600 parameters). Its domain-balanced epoch contains 16,528
+draws, giving exactly 1,033 optimizer steps per epoch and 3,099 total.
+
+For the complete validation-only selection and single held-out test run:
+
+```bash
+WORK_ROOT=/new/unique/experiment \
+MIND2WEB_TEST=/path/to/fixed-ocr-test100 \
+MIND2WEB_TEST_KEY=mind2web_test \
+bash fast_dvlm/train_scripts/run_gui_pipeline.sh
+```
+
+The pipeline selects Planner checkpoints at steps 813/1626, selects Grounder
+checkpoints at 1033/2066/3099 on two independent validation-100 sets, then
+selects MDM versus speculative decoding on validation. Only after all choices
+are frozen does it run the ordered OCR-aligned Mind2Web test-100 once, with two
+persistent one-GPU workers handling 50 samples each. OCR is not run during
+inference; the benchmark consumes the pre-generated OCR-aligned crop and SSR
+annotation. `final/comparison.json` records quality, mean/p50/p95 latency,
+weights, peak GPU memory, and the fixed baselines.
+
 ## Evaluation (VLMEvalKit)
 
 [VLMEvalKit](https://github.com/open-compass/VLMEvalKit) is **vendored** at `../third_party/VLMEvalKit` (i.e. `Fast-dLLM/third_party/VLMEvalKit`). `run_eval.sh` runs one dataset per invocation; **default `TASK` is `DocVQA_VAL`** as a concrete example—override with `TASK=…` for any other VLMEval split.

@@ -348,6 +348,9 @@ class HFModelMixin(BaseModel):
                 torch_dtype=self.torch_dtype,
                 config=self.hf_model_config,
                 quantization_config=self.quant_config,
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                token=model_args.token,
                 trust_remote_code=model_args.trust_remote_code,
             )
 
@@ -431,6 +434,9 @@ class HFModelMixin(BaseModel):
                 torch_dtype=self.torch_dtype,
                 config=self.hf_model_config,
                 quantization_config=self.quant_config,
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                token=model_args.token,
                 trust_remote_code=True,
                 **inference_load_kwargs,
             )
@@ -443,6 +449,10 @@ class HFModelMixin(BaseModel):
                 torch_dtype=self.torch_dtype,
                 config=self.hf_model_config,
                 quantization_config=self.quant_config,
+                cache_dir=model_args.cache_dir,
+                revision=model_args.model_revision,
+                token=model_args.token,
+                trust_remote_code=model_args.trust_remote_code,
                 **inference_load_kwargs_bak,
             )
             

@@ -1,0 +1,110 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from fast_dvlm.gui_finetune.data import (
+    audit_converted_training_file,
+    convert_grounder_dataset,
+    convert_planner_dataset,
+    select_planner_validation_rows,
+    sha256_file,
+)
+
+
+class GuiDataTest(unittest.TestCase):
+    def test_planner_conversion_and_validation_selection(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source, images, output = root / "source", root / "images", root / "out"
+            source.mkdir()
+            images.mkdir()
+            (source / "manifest.json").write_text('{"fixture":true}\n', encoding="utf-8")
+            counts = {"train": 12, "validation": 120, "test": 10}
+            next_id = 0
+            for split, count in counts.items():
+                lines = []
+                for index in range(count):
+                    sample_id = f"{split}-{next_id}"
+                    next_id += 1
+                    image = f"{sample_id}.png"
+                    (images / image).write_bytes(b"fixture")
+                    action = ("click", "type", "swipe")[index % 3]
+                    lines.append(
+                        json.dumps(
+                            {
+                                "id": sample_id,
+                                "image": image,
+                                "messages": [
+                                    {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": "Do it"}]},
+                                    {"role": "assistant", "content": json.dumps({"action": action})},
+                                ],
+                            }
+                        )
+                    )
+                (source / f"{split}.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+            audit = convert_planner_dataset(
+                source,
+                images,
+                output,
+                expected_counts=counts,
+                expected_manifest_sha256=sha256_file(source / "manifest.json"),
+            )
+            selected = json.loads((output / "validation-100.json").read_text())
+            self.assertEqual(len(selected), 100)
+            self.assertEqual(set(audit["validation_selection"]["action_counts"]), {"click", "swipe", "type"})
+            self.assertTrue(all(row["conversations"][-1]["from"] == "gpt" for row in selected))
+            self.assertEqual(audit_converted_training_file(output / "train.json")["count"], 12)
+
+    def test_stable_validation_selection_is_order_independent(self):
+        rows = [
+            {"id": f"sample-{index}", "_gui_balance_key": f"a{index % 5}"}
+            for index in range(140)
+        ]
+        forward = [row["id"] for row in select_planner_validation_rows(rows)]
+        backward = [row["id"] for row in select_planner_validation_rows(list(reversed(rows)))]
+        self.assertEqual(forward, backward)
+
+    def test_grounder_conversion_is_two_domain_and_direct_action(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            sources = {}
+            for domain in ("mind2web", "mobile"):
+                directory = root / domain
+                directory.mkdir()
+                sources[domain] = directory
+                table = pa.Table.from_pylist(
+                    [
+                        {
+                            "sample_id": f"{domain}-{index}",
+                            "source": domain,
+                            "image": {"bytes": b"\x89PNG\r\n\x1a\nfixture", "path": "x.png"},
+                            "conversations": [
+                                {"from": "human", "value": "<image>\nClick on X."},
+                                {"from": "gpt", "value": "lclick [1,2,3,4]"},
+                            ],
+                            "metadata": "{}",
+                        }
+                        for index in range(2)
+                    ]
+                )
+                pq.write_table(table, directory / "part.parquet")
+            audit = convert_grounder_dataset(
+                sources["mind2web"],
+                sources["mobile"],
+                root / "out",
+                expected_counts={"mind2web": 2, "mobile": 2},
+            )
+            rows = json.loads((root / "out" / "train.json").read_text())
+            self.assertEqual(len(rows), 4)
+            self.assertEqual({row["_gui_domain"] for row in rows}, {"mind2web", "mobile"})
+            self.assertEqual(audit["sampling"], "domain_balanced_with_replacement")
+
+
+if __name__ == "__main__":
+    unittest.main()
