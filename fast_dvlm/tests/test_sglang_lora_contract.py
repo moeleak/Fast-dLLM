@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
+import types
 import unittest
 from pathlib import Path
 
@@ -19,8 +21,40 @@ class SGLangLoRAContractTest(unittest.TestCase):
         sys.path.insert(0, str(root / "third_party" / "sglang" / "python"))
         os.environ.setdefault("SGLANG_DISABLE_CUDNN_CHECK", "1")
 
+    @staticmethod
+    def load_lora_adapter():
+        root = Path(__file__).resolve().parents[2]
+
+        def module(name, **values):
+            value = types.ModuleType(name)
+            for key, item in values.items():
+                setattr(value, key, item)
+            sys.modules[name] = value
+
+        module("sglang")
+        module("sglang.srt")
+        module("sglang.srt.configs")
+        module("sglang.srt.configs.load_config", LoadConfig=object)
+        module("sglang.srt.layers")
+        module("sglang.srt.layers.utils", get_layer_id=lambda _: None)
+        module("sglang.srt.lora")
+        module("sglang.srt.lora.backend")
+        module("sglang.srt.lora.backend.base_backend", BaseLoRABackend=object)
+        module("sglang.srt.lora.backend.lora_registry", LORA_SUPPORTED_BACKENDS=set())
+        module("sglang.srt.lora.lora_config", LoRAConfig=object)
+        module("sglang.srt.model_loader")
+        module("sglang.srt.model_loader.loader", DefaultModelLoader=object)
+        module("sglang.srt.utils")
+        module("sglang.srt.utils.hf_transformers_utils", AutoConfig=object)
+        path = root / "third_party" / "sglang" / "python" / "sglang" / "srt" / "lora" / "lora.py"
+        spec = importlib.util.spec_from_file_location("_fast_dvlm_sglang_lora", path)
+        assert spec and spec.loader
+        loaded = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(loaded)
+        return loaded.LoRAAdapter
+
     def test_separate_peft_qkv_matches_sglang_fused_layout(self):
-        from sglang.srt.lora.lora import LoRAAdapter
+        LoRAAdapter = self.load_lora_adapter()
 
         torch.manual_seed(42)
         rank, input_size = 2, 5
