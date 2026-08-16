@@ -13,8 +13,48 @@ if [[ "${task}" != planner && "${task}" != grounder ]]; then
   echo "TASK must be planner or grounder" >&2
   exit 2
 fi
+write_gpu_audit() {
+  python3 - "${output_dir}/gpu-memory.csv" "${output_dir}/gpu-memory-audit.json" <<'PY'
+import csv
+import json
+import sys
+from pathlib import Path
+peak = {}
+with open(sys.argv[1], newline="", encoding="utf-8") as handle:
+    for row in csv.reader(handle):
+        if len(row) != 3:
+            continue
+        index, used = int(row[1].strip()), int(row[2].strip())
+        peak[index] = max(peak.get(index, 0), used)
+result = {"schema_version": 1, "peak_memory_used_mib": peak}
+Path(sys.argv[2]).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
+print(json.dumps(result, sort_keys=True))
+PY
+}
+
 if [[ -e "${output_dir}" ]]; then
-  echo "Refusing to overwrite evaluation output: ${output_dir}" >&2
+  if [[ -f "${output_dir}/part-00000.jsonl" && -f "${output_dir}/part-00001.jsonl" &&
+        -f "${output_dir}/run-config-00000.json" && -f "${output_dir}/run-config-00001.json" &&
+        -f "${output_dir}/gpu-memory.csv" ]]; then
+    python3 - "${output_dir}" <<'PY'
+import json
+import sys
+from pathlib import Path
+root = Path(sys.argv[1])
+rows = []
+for path in sorted(root.glob("part-*.jsonl")):
+    rows.extend(json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line)
+ids = [str(row["sample_id"]) for row in rows]
+if len(rows) != 100 or len(set(ids)) != 100:
+    raise SystemExit(f"incomplete evaluation output: rows={len(rows)} unique={len(set(ids))}")
+if any(row.get("error") for row in rows):
+    raise SystemExit("completed evaluation output contains runtime errors")
+PY
+    write_gpu_audit
+    echo "Reusing completed 100-sample evaluation: ${output_dir}"
+    exit 0
+  fi
+  echo "Refusing incomplete evaluation output to avoid rerunning held-out samples: ${output_dir}" >&2
   exit 2
 fi
 mkdir -p "${output_dir}"
@@ -85,19 +125,4 @@ if (( status != 0 )); then
   exit "${status}"
 fi
 
-python3 - "${monitor_log}" "${output_dir}/gpu-memory-audit.json" <<'PY'
-import csv
-import json
-import sys
-from pathlib import Path
-peak = {}
-with open(sys.argv[1], newline="", encoding="utf-8") as handle:
-    for row in csv.reader(handle):
-        if len(row) != 3:
-            continue
-        index, used = int(row[1].strip()), int(row[2].strip())
-        peak[index] = max(peak.get(index, 0), used)
-result = {"schema_version": 1, "peak_memory_used_mib": peak}
-Path(sys.argv[2]).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
-print(json.dumps(result, sort_keys=True))
-PY
+write_gpu_audit

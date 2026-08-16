@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import json
+import os
+import subprocess
+import tempfile
 import unittest
+from pathlib import Path
 
 from fast_dvlm.gui_finetune.metrics import (
     parse_grounding_action,
@@ -29,6 +34,45 @@ class GuiContractsTest(unittest.TestCase):
 
         def numel(self):
             return self.count
+
+    def test_completed_evaluation_is_reused_without_worker_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "evaluation"
+            output.mkdir()
+            for rank in range(2):
+                rows = [
+                    {"sample_id": f"sample-{index}", "error": None}
+                    for index in range(rank, 100, 2)
+                ]
+                (output / f"part-{rank:05d}.jsonl").write_text(
+                    "".join(json.dumps(row) + "\n" for row in rows),
+                    encoding="utf-8",
+                )
+                (output / f"run-config-{rank:05d}.json").write_text(
+                    "{}\n", encoding="utf-8"
+                )
+            (output / "gpu-memory.csv").write_text(
+                "2026-01-01T00:00:00,0,123\n2026-01-01T00:00:00,1,456\n",
+                encoding="utf-8",
+            )
+            script = Path(__file__).resolve().parents[1] / "eval" / "run_gui_eval_2gpu.sh"
+            env = {
+                **os.environ,
+                "TASK": "planner",
+                "MODEL_PATH": "/unused/model",
+                "OUTPUT_DIR": str(output),
+            }
+            completed = subprocess.run(
+                ["bash", str(script)],
+                env=env,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            self.assertIn("Reusing completed 100-sample evaluation", completed.stdout)
+            audit = json.loads((output / "gpu-memory-audit.json").read_text())
+            self.assertEqual(audit["peak_memory_used_mib"], {"0": 123, "1": 456})
 
     def test_learning_rates_and_epoch_lengths(self):
         rates = LearningRates(1e-6, 2e-6, 1e-7)

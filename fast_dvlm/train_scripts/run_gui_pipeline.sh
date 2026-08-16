@@ -8,8 +8,13 @@ export PYTHONPATH="${repo_root}/third_party/sglang/python:${repo_root}/third_par
 
 work_root="${WORK_ROOT:?Set WORK_ROOT to a new, unique experiment directory}"
 if [[ -e "${work_root}" ]]; then
-  echo "Refusing to overwrite experiment directory: ${work_root}" >&2
-  exit 2
+  if [[ "${RESUME_PIPELINE:-0}" != 1 ]]; then
+    echo "Experiment directory exists; set RESUME_PIPELINE=1 to resume: ${work_root}" >&2
+    exit 2
+  fi
+  echo "Resuming experiment directory: ${work_root}"
+else
+  mkdir -p "${work_root}"/{data,training,validation,final}
 fi
 mkdir -p "${work_root}"/{data,training,validation,final}
 
@@ -25,18 +30,40 @@ mind2web_test="${MIND2WEB_TEST:?Set MIND2WEB_TEST to the fixed OCR-aligned test-
 mind2web_test_key="${MIND2WEB_TEST_KEY:?Set MIND2WEB_TEST_KEY to its manifest key}"
 test_ids_sha256="${MIND2WEB_TEST_IDS_SHA256:-00a91fdb996afae3bd14af096eecf3fbf95535cb482582d4bc203476f212a689}"
 
-python3 "${repo_root}/fast_dvlm/data/prepare_gui_data.py" planner \
-  --source-dir "${planner_source}" --image-root "${planner_images}" \
-  --output-dir "${work_root}/data/planner"
-python3 "${repo_root}/fast_dvlm/data/prepare_gui_data.py" grounder \
-  --mind2web-dir "${mind2web_train}" --mobile-dir "${mobile_train}" \
-  --output-dir "${work_root}/data/grounder" \
-  --mind2web-validation-root "${mind2web_validation}" \
-  --mind2web-validation-key "${mind2web_validation_key}" \
-  --mobile-validation-root "${mobile_validation}" \
-  --mobile-validation-key "${mobile_validation_key}" \
-  --mind2web-test-root "${mind2web_test}" \
-  --mind2web-test-key "${mind2web_test_key}"
+prepare_data() {
+  local output="$1"
+  shift
+  if [[ -f "${output}/train.json" && -f "${output}/audit.json" ]]; then
+    python3 - "${output}/train.json" <<'PY'
+import sys
+from pathlib import Path
+from fast_dvlm.gui_finetune.data import audit_converted_training_file
+print(audit_converted_training_file(Path(sys.argv[1])))
+PY
+    echo "Reusing authenticated converted data: ${output}"
+    return
+  fi
+  if [[ -e "${output}" ]]; then
+    echo "Refusing incomplete converted-data directory: ${output}" >&2
+    exit 2
+  fi
+  "$@"
+}
+
+prepare_data "${work_root}/data/planner" \
+  python3 "${repo_root}/fast_dvlm/data/prepare_gui_data.py" planner \
+    --source-dir "${planner_source}" --image-root "${planner_images}" \
+    --output-dir "${work_root}/data/planner"
+prepare_data "${work_root}/data/grounder" \
+  python3 "${repo_root}/fast_dvlm/data/prepare_gui_data.py" grounder \
+    --mind2web-dir "${mind2web_train}" --mobile-dir "${mobile_train}" \
+    --output-dir "${work_root}/data/grounder" \
+    --mind2web-validation-root "${mind2web_validation}" \
+    --mind2web-validation-key "${mind2web_validation_key}" \
+    --mobile-validation-root "${mobile_validation}" \
+    --mobile-validation-key "${mobile_validation_key}" \
+    --mind2web-test-root "${mind2web_test}" \
+    --mind2web-test-key "${mind2web_test_key}"
 
 planner_output="${work_root}/training/planner"
 STAGE=planner \
