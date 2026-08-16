@@ -20,6 +20,7 @@ for value in (str(_REPO_ROOT), str(_THIRD_PARTY)):
 
 from fast_dvlm.gui_finetune.metrics import parse_grounding_action
 from fast_dvlm.gui_finetune.runtime import SharedBackboneEngine
+from fast_dvlm.gui_finetune.data import load_benchmark_rows
 
 
 def parse_args() -> argparse.Namespace:
@@ -91,19 +92,7 @@ def _planner_samples(path: Path) -> list[dict[str, Any]]:
 
 
 def _grounder_samples(root: Path, benchmark: str) -> list[dict[str, Any]]:
-    manifest = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
-    if benchmark not in manifest.get("benchmarks", {}):
-        raise RuntimeError(f"benchmark is not present: {benchmark}")
-    entry = manifest["benchmarks"][benchmark]
-    rows = list(_read_jsonl(root / entry["path"]))
-    expected = int(entry["rows"])
-    if len(rows) != expected:
-        raise RuntimeError(f"benchmark row count mismatch: expected {expected}, got {len(rows)}")
-    sample_hash = hashlib.sha256(
-        "".join(f"{row['sample_id']}\n" for row in rows).encode("utf-8")
-    ).hexdigest()
-    if sample_hash != entry["sample_ids_sha256"]:
-        raise RuntimeError("benchmark sample ID hash mismatch")
+    rows, _ = load_benchmark_rows(root, benchmark)
     for row in rows:
         row["image"] = str((root / row["image"]).resolve())
     return rows

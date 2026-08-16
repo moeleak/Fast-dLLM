@@ -12,12 +12,51 @@ from fast_dvlm.gui_finetune.data import (
     audit_converted_training_file,
     convert_grounder_dataset,
     convert_planner_dataset,
+    load_benchmark_rows,
     select_planner_validation_rows,
     sha256_file,
 )
 
 
 class GuiDataTest(unittest.TestCase):
+    def test_benchmark_manifest_accepts_authenticated_legacy_jsonl(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            samples = root / "samples"
+            samples.mkdir()
+            data_path = samples / "mind2web.jsonl"
+            data_path.write_text(
+                "".join(
+                    json.dumps({"sample_id": f"sample-{index}", "image": "x.png"}) + "\n"
+                    for index in range(3)
+                ),
+                encoding="utf-8",
+            )
+            (root / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "benchmarks": {
+                            "mind2web": {
+                                "path": "samples/mind2web.jsonl",
+                                "rows": 3,
+                                "sha256": sha256_file(data_path),
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            rows, audit = load_benchmark_rows(root, "mind2web")
+            self.assertEqual(
+                [row["sample_id"] for row in rows],
+                ["sample-0", "sample-1", "sample-2"],
+            )
+            self.assertEqual(audit["data_sha256"], sha256_file(data_path))
+
+            data_path.write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "row count mismatch"):
+                load_benchmark_rows(root, "mind2web")
+
     def test_planner_conversion_and_validation_selection(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

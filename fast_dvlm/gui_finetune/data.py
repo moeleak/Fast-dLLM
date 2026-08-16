@@ -126,6 +126,60 @@ def iter_jsonl(path: Path) -> Iterator[dict[str, Any]]:
             yield value
 
 
+def load_benchmark_rows(
+    root: Path,
+    benchmark: str,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Load and authenticate a benchmark manifest entry.
+
+    Older OCR-aligned benchmark manifests authenticate the JSONL file itself,
+    while newer manifests also record the ordered sample-ID digest. Accept
+    either evidence format, verify every digest that is present, and always
+    return the computed ordered-ID digest for downstream pinning.
+    """
+
+    root = root.resolve()
+    manifest_path = root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if benchmark not in manifest.get("benchmarks", {}):
+        raise ValueError(f"benchmark {benchmark!r} is absent from {manifest_path}")
+    entry = manifest["benchmarks"][benchmark]
+    data_path = (root / str(entry["path"])).resolve()
+    if data_path != root and root not in data_path.parents:
+        raise ValueError(f"benchmark path escapes its root: {data_path}")
+
+    rows = list(iter_jsonl(data_path))
+    ids = [str(row.get("sample_id", "")).strip() for row in rows]
+    expected_rows = int(entry["rows"])
+    if len(rows) != expected_rows:
+        raise ValueError(
+            f"benchmark row count mismatch: expected {expected_rows}, got {len(rows)}"
+        )
+    if not all(ids) or len(ids) != len(set(ids)):
+        raise ValueError("benchmark sample IDs must be non-empty and unique")
+
+    sample_ids_sha256 = sha256_values(ids)
+    expected_ids_sha256 = entry.get("sample_ids_sha256")
+    expected_file_sha256 = entry.get("sha256")
+    if expected_ids_sha256 is None and expected_file_sha256 is None:
+        raise ValueError("benchmark manifest requires a file or sample-ID SHA-256")
+    if expected_ids_sha256 is not None and sample_ids_sha256 != expected_ids_sha256:
+        raise ValueError("benchmark sample ID hash mismatch")
+    data_sha256 = sha256_file(data_path)
+    if expected_file_sha256 is not None and data_sha256 != expected_file_sha256:
+        raise ValueError("benchmark data file hash mismatch")
+
+    return rows, {
+        "root": str(root),
+        "benchmark": benchmark,
+        "count": len(rows),
+        "sample_ids_sha256": sample_ids_sha256,
+        "data_path": str(data_path),
+        "data_sha256": data_sha256,
+        "manifest_sha256": sha256_file(manifest_path),
+    }
+
+
 def _atomic_json(path: Path, value: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(path.suffix + ".tmp")
@@ -403,30 +457,13 @@ def convert_grounder_dataset(
     heldout_audit: dict[str, Any] = {}
     heldout_ids: dict[str, set[str]] = {}
     for name, (root, benchmark) in (heldout_benchmarks or {}).items():
-        root = root.resolve()
-        manifest_path = root / "manifest.json"
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if benchmark not in manifest.get("benchmarks", {}):
-            raise ValueError(f"held-out benchmark {benchmark!r} is absent from {manifest_path}")
-        entry = manifest["benchmarks"][benchmark]
-        rows = list(iter_jsonl(root / entry["path"]))
+        rows, benchmark_audit = load_benchmark_rows(root, benchmark)
         ids = [str(row["sample_id"]) for row in rows]
-        if len(ids) != int(entry["rows"]) or len(ids) != len(set(ids)):
-            raise ValueError(f"held-out benchmark count/duplicate mismatch: {name}")
-        digest = sha256_values(ids)
-        if digest != entry["sample_ids_sha256"]:
-            raise ValueError(f"held-out benchmark sample hash mismatch: {name}")
         overlap = seen_ids & set(ids)
         if overlap:
             raise ValueError(f"Grounder train/{name} leakage: {sorted(overlap)[:5]}")
         heldout_ids[name] = set(ids)
-        heldout_audit[name] = {
-            "root": str(root),
-            "benchmark": benchmark,
-            "count": len(ids),
-            "sample_ids_sha256": digest,
-            "manifest_sha256": sha256_file(manifest_path),
-        }
+        heldout_audit[name] = benchmark_audit
     names = sorted(heldout_ids)
     for index, left in enumerate(names):
         for right in names[index + 1 :]:
