@@ -1,0 +1,104 @@
+{
+  "assistant_only_labels": true,
+  "domains": {
+    "mind2web": {
+      "action_counts": {
+        "hover": 163,
+        "lclick": 5919,
+        "type_in": 1259
+      },
+      "count": 7341,
+      "sample_ids_sha256": "0d399f203a51f510683acbfb1ce718cd65b83ebdc30ce60267e944e005797c44",
+      "source_shards": {
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00000.parquet": "9834b0aaede97c09283e352421a79ae78ee2638b97b698798a16b912b483b917",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00001.parquet": "13583dc1b520cfc9d7ba343ad362f4d7213d591ebcdbb66af350f9225139457c",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00002.parquet": "ee8e022ac5cdaeeaf4770d1d56b88aa378ed608e1bfa2bc5c1a33dcc0e4f12f8",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00003.parquet": "08690547fba5ad93a504c9ff564f83b6d46a2fef8994940f0829a96aca77a27d",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00004.parquet": "0650e67062e916c3c367ea188bf3df150410c970b31d44673d6430781fcc4e5f",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00005.parquet": "753ef2d57057e760f8d5cf0bbcb4940d6a555a571faff7797fd71404b387a9ad",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00006.parquet": "137a750f0d910b45080a6a8dd85d0c8b5969eaf8fb6354be745bc3ece4c8d4fb",
+        "/home/ma-user/work/LLaDA-o/data/train_ocr/mind2web/shard-00007.parquet": "5278d2712d0b9a77f75833a8f056297df183ae11529d6b6998aaf7bf39990d0d"
+      }
+    },
+    "mobile": {
+      "action_counts": {
+        "lclick": 8264
+      },
+      "count": 8264,
+      "sample_ids_sha256": "13f740000d03ba94e5f875574f77fb629828e37570741ddb1031d3ec142d9537",
+      "source_shards": {
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00000.parquet": "aca307daececefc97bb5ba8bcfdd1eee2872486f21f6fcb778685b5b27410fcb",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00001.parquet": "3a2d5fd7efec0e9aba6df9f7fa04a1feb46e6786cfb4526ebe2649e46a9550aa",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00002.parquet": "c2b15964b5c70ad96e056aa3d340f8e00c16dd93ca8e9088f3681bc59b12e912",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00003.parquet": "e9173e6b4d27586c4e703ffd2eb3abbba81098a9bba71d1bdd7fe53c1e713aa8",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00004.parquet": "0028ee0f35dcf02a6c9f7ec3f566e3070cffdc757ee909ae44e7ff2fe0299336",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00005.parquet": "0d3ee181563fe7ec4d17ca4c5fcaaf8d9c9b0d9186d3c19a390ef8b679a4fa3e",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00006.parquet": "e07cc797e655273d5163b8a23084a2187b66b13c1794c715385a750172806b0f",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00007.parquet": "aba1a3fc293ab3146915322e3d1cc29052c07d7d15018b4337b0f4de969db859",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00008.parquet": "a9f31c21dbb3c1edb5db11d74cfaf29f75293f184bda964f2987cf7dd2485b34",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00009.parquet": "890b427f561ff53695ef80587e3d112e1021b420c15014aa97fc9f30f1be40ba",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00010.parquet": "66b21980985b888ed7738ac2c7a747467f68d88879f51b07b6f8e2334865a393",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00011.parquet": "cd6be17763c9245253efdf9f53685c0f401a69a48ba4b5da926fb69f53520aac",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00012.parquet": "29a5e54a8e9dca49e6509b09b706bb2727cfc1c0a3485837d4dc5308f6b9355c",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00013.parquet": "320eb380537fb7d392f010b9a5e9b285820109677c9a2b92ad6913916fc05863",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00014.parquet": "c044c78a59498eeef3e8bb2f87cab23156e3b6f0043b8490f740821887497f24",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00015.parquet": "12003ca1b86272a828258816155080aaead279dfd85ad40fc64a429d9b428eb2",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00016.parquet": "7d36502cf8e96fcb0874d34238fb3e58f11509ccb2ba1955dcdd3a33b262ed05",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00017.parquet": "892928cb557a5418fe6f643bddca776ab49d3c0b733f3efaaee4224d336b21a0",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00018.parquet": "7b98a4c5a7c30e50d508f96ffc0cf5a7aa8ae228da296c9b22f852bf3fb33d0a",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00019.parquet": "15632ea47a806daca4dc6020649df91f3f9986820a211fd3a811fa62c28e7a79",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00020.parquet": "de4362f0883d5215251816f975b5a4a063563659b9fe36ceedf67074e465e778",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00021.parquet": "5610527ac1b5c6cb63fe3d8effcf456ba068206a531721241039b1db34844c17",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00022.parquet": "35d57e45785e944805242dce685e1a06ddec6271b416a79769912bb9470cf1df",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00023.parquet": "53b3bece9ccee3a463ea6b06675c0144266bd0ca0d181bdc8ade71f9f2a89451",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00024.parquet": "17fde0a6eb5649fbaee9fc14e0a3e43a5ee29622d7f7f924eb6f165c42628d17",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00025.parquet": "abb5da28f2a79d32ab0e9a843e1b81921e98bd56a19d9e3b2578999ce66aa22e",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00026.parquet": "0ad505f07a09a6948afa58ced0375ff1acf6025ad1e4554a7943bb7f54cc5da9",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00027.parquet": "11f30721601017040d984339df2b625cc4da5e458a90eb546e2e3224b0587ed6",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00028.parquet": "5b7eef70a1b577cb31cd74321ea3784192e0312b4ea34dde94611cb96517fecf",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00029.parquet": "8075868fffb9e1053257035ffe3e93dbda42983f318a55e4b63e30b0e4702c42",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00030.parquet": "eea8207c3a6f9feb6df9d176116ff1e16ac2655c418c5ec78fb25577fb6b466d",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00031.parquet": "4d4ce7bdb20363f8ba2dbc8e04ea50915794e3d034a2e19cf886b882f42ee509",
+        "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/train/shard-00032.parquet": "acc23c1328a818d7c41dc61cbeebcd5bf60d44e8ef52f9b59613d3c9b41b4be3"
+      }
+    }
+  },
+  "heldout_benchmarks": {
+    "mind2web_test": {
+      "benchmark": "mind2web",
+      "count": 100,
+      "data_path": "/home/ma-user/work/LLaDA-o/data/bench_ocr/samples/mind2web.jsonl",
+      "data_sha256": "e97544829701a4236b27f2620f232f1d502394a1da98782195dd1fe72238d091",
+      "manifest_count": 6055,
+      "manifest_sha256": "5dc6c5dcfb459e1629330a5b47fc05df8ceecb5c71dda832551cf148d8e71fbb",
+      "root": "/home/ma-user/work/LLaDA-o/data/bench_ocr",
+      "sample_ids_sha256": "00a91fdb996afae3bd14af096eecf3fbf95535cb482582d4bc203476f212a689",
+      "selection": "ordered_prefix",
+      "selection_limit": 100
+    },
+    "mind2web_validation": {
+      "benchmark": "mind2web_validation",
+      "count": 100,
+      "data_path": "/home/ma-user/work/LLaDA-o/data/bench_ocr_validation/samples/mind2web_validation.jsonl",
+      "data_sha256": "395552859b32e2d93a548cb825e04a4591e56433b77a5d9e48b236c97b7208fd",
+      "manifest_sha256": "39788e4fe102aa18fffcd4d9d6624cad80afc3d27f39eca335c27d5c9fa98c94",
+      "root": "/home/ma-user/work/LLaDA-o/data/bench_ocr_validation",
+      "sample_ids_sha256": "550d141e08ede831b7defb83bc84f5d054acfea006684065355c51fc5c31ef6b"
+    },
+    "mobile_validation": {
+      "benchmark": "mobile_validation",
+      "count": 100,
+      "data_path": "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/benchmark/samples/mobile_validation.jsonl",
+      "data_sha256": "0300b3c2e1b99c9fa15e867689fe209c9b03e9a1579da2f9cbad16fbec8e5e79",
+      "manifest_sha256": "0ef96ab823221d0fd7e6fabdd3c0dcbdcc6d9573265ee139d1dfbde4397e82e6",
+      "root": "/home/ma-user/work/LLaDA-o/data/residual-grounding/mobile/benchmark",
+      "sample_ids_sha256": "0662355e83e78095686ce4e8f0b9808a16facc7cef623713b8d664e5397b82e4"
+    }
+  },
+  "image_root": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/grounder/images",
+  "kind": "fast_dvlm_gui_grounder",
+  "output": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/grounder/train.json",
+  "sampling": "domain_balanced_with_replacement",
+  "schema_version": 1,
+  "total_count": 15605
+}

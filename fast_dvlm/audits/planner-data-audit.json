@@ -1,0 +1,81 @@
+{
+  "assistant_only_labels": true,
+  "image_root": "/home/ma-user/work/LLaDA-Agent/data/Uni-GUI-OpenMobile",
+  "kind": "fast_dvlm_gui_planner",
+  "schema_version": 1,
+  "source_dir": "/home/ma-user/work/LLaDA-o/data/unigui-openmobile-planner-v2-content-v4",
+  "source_manifest": "/home/ma-user/work/LLaDA-o/data/unigui-openmobile-planner-v2-content-v4/manifest.json",
+  "source_manifest_sha256": "c64bede96c021260438b12a5b252ba693ed87ffa7a97a254db40c8c7cea4ad11",
+  "splits": {
+    "test": {
+      "action_counts": {
+        "answer": 63,
+        "back": 31,
+        "click": 913,
+        "home": 21,
+        "long_press": 15,
+        "swipe": 218,
+        "terminate": 105,
+        "type": 121,
+        "wait": 14
+      },
+      "count": 1501,
+      "output": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/planner/test.json",
+      "sample_ids_sha256": "a1efb7778493fdfa98fcd34ef10c8a495a1ff07aff5d5bc81c5225d7238f2af2",
+      "source_sha256": "972f0e0e40b66ba3dff5fd1a8fdb8552ca4fca2f590ef43124589432d61801a2"
+    },
+    "train": {
+      "action_counts": {
+        "answer": 407,
+        "back": 285,
+        "click": 8024,
+        "home": 143,
+        "long_press": 240,
+        "swipe": 1790,
+        "terminate": 944,
+        "type": 1093,
+        "wait": 78
+      },
+      "count": 13004,
+      "output": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/planner/train.json",
+      "sample_ids_sha256": "d0fa03a1c13b7129b64e23c9dd525a978656c6427944221a8ac8b55720861b1c",
+      "source_sha256": "8c65c23bda8b26cef8a815a2c596bb925fcc0a4520870aa25bfb57cc0bcb7d21"
+    },
+    "validation": {
+      "action_counts": {
+        "answer": 51,
+        "back": 38,
+        "click": 1025,
+        "home": 16,
+        "long_press": 29,
+        "swipe": 219,
+        "terminate": 117,
+        "type": 132,
+        "wait": 12
+      },
+      "count": 1639,
+      "output": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/planner/validation.json",
+      "sample_ids_sha256": "927562666b0f96ce26b67c2cf218f61e4dddf82de7b9a6ed30cd5e66899f16e7",
+      "source_sha256": "6444f030b0ddc90ba9ba425dcb821e14db83043d5fe7dac467752f4f1b5e2a1f"
+    }
+  },
+  "validation_selection": {
+    "action_counts": {
+      "answer": 4,
+      "back": 4,
+      "click": 51,
+      "home": 4,
+      "long_press": 5,
+      "swipe": 11,
+      "terminate": 8,
+      "type": 9,
+      "wait": 4
+    },
+    "count": 100,
+    "method": "action_floor_then_sha256_sample_id",
+    "minimum_per_action": 4,
+    "output": "/home/ma-user/work/LLaDA-o/runs/fast-dvlm-gui-full-c384cbc-20260816/data/planner/validation-100.json",
+    "sample_ids_sha256": "4f48d76b10d3c33d97f1ce5352b3724ccbedba5886c2c7dfe99579f38b9ae18f",
+    "source_split": "validation"
+  }
+}
