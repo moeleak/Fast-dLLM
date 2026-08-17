@@ -14,7 +14,10 @@ from fast_dvlm.gui_finetune.metrics import (
     select_grounder_checkpoint,
     select_planner_checkpoint,
 )
-from fast_dvlm.gui_finetune.runtime import engine_arguments
+from fast_dvlm.gui_finetune.runtime import (
+    engine_arguments,
+    register_fast_dvlm_processor,
+)
 from fast_dvlm.gui_finetune.training import (
     EXPECTED_LORA_PARAMETERS,
     GradientRoleTracker,
@@ -297,6 +300,7 @@ class GuiContractsTest(unittest.TestCase):
     def test_shared_engine_uses_one_pinned_adapter(self):
         args = engine_arguments(
             "/model",
+            processor_path="/processor",
             adapter_path="/adapter",
             adapter_name="gui_grounder",
             algorithm="mdm",
@@ -304,12 +308,34 @@ class GuiContractsTest(unittest.TestCase):
             max_lora_rank=32,
         )
         self.assertEqual(args["model_path"], "/model")
+        self.assertEqual(args["tokenizer_path"], "/processor")
         self.assertNotIn("lora_path", args)
         self.assertEqual(
             args["lora_paths"],
             [{"lora_name": "gui_grounder", "lora_path": "/adapter", "pinned": True}],
         )
         self.assertEqual(args["max_loaded_loras"], 1)
+
+    def test_fast_dvlm_processor_registration_is_fail_closed(self):
+        class Processor:
+            pass
+
+        class DifferentProcessor:
+            pass
+
+        registry = {}
+        register_fast_dvlm_processor(Processor, registry)
+        self.assertIs(registry["fast_dvlm"], Processor)
+        register_fast_dvlm_processor(Processor, registry)
+        with self.assertRaisesRegex(RuntimeError, "different processor"):
+            register_fast_dvlm_processor(DifferentProcessor, registry)
+
+        root = Path(__file__).resolve().parents[2]
+        runtime = root / "fast_dvlm" / "gui_finetune" / "runtime.py"
+        text = runtime.read_text(encoding="utf-8")
+        self.assertIn("Qwen2_5_VLProcessor.from_pretrained", text)
+        launcher = root / "fast_dvlm" / "eval" / "run_gui_eval_2gpu.sh"
+        self.assertIn('tail -n 100 -- "${output_dir}"/worker-*.log', launcher.read_text())
 
     def test_grounder_audit_accepts_only_36_layer_qkvo_lora(self):
         per_module = EXPECTED_LORA_PARAMETERS // (36 * 4)

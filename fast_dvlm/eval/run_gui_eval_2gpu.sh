@@ -121,7 +121,7 @@ wait "${pid1}" || status=$?
 cleanup
 trap - EXIT INT TERM
 if (( status != 0 )); then
-  tail -100 "${output_dir}"/worker-*.log >&2 || true
+  tail -n 100 -- "${output_dir}"/worker-*.log >&2 || true
   exit "${status}"
 fi
 

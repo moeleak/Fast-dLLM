@@ -14,6 +14,7 @@ ALGORITHMS = {"mdm": "HierarchyBlock", "spec": "SpeculativeBlock"}
 def engine_arguments(
     model_path: str,
     *,
+    processor_path: str,
     adapter_path: str | None,
     adapter_name: str,
     algorithm: str,
@@ -24,6 +25,7 @@ def engine_arguments(
         raise ValueError(f"unknown Fast-dVLM algorithm: {algorithm}")
     result: dict[str, Any] = {
         "model_path": model_path,
+        "tokenizer_path": processor_path,
         "trust_remote_code": True,
         "dtype": "bfloat16",
         "mem_fraction_static": mem_fraction_static,
@@ -52,6 +54,33 @@ def engine_arguments(
             }
         )
     return result
+
+
+def register_fast_dvlm_processor(
+    processor_class: type[Any],
+    registry: dict[str, type[Any]] | None = None,
+) -> None:
+    """Make SGLang load Fast-dVLM's Qwen2.5-VL processor, not a tokenizer.
+
+    Loading the trust-remote-code checkpoint registers ``fast_dvlm`` as a
+    custom Transformers config.  ``AutoProcessor`` has no mapping for that
+    config and silently falls back to ``Qwen2TokenizerFast``.  SGLang then
+    fails when its multimodal wrapper accesses ``processor.tokenizer``.
+    """
+
+    if registry is None:
+        from sglang.srt.multimodal.customized_mm_processor_utils import (
+            _CUSTOMIZED_MM_PROCESSOR,
+        )
+
+        registry = _CUSTOMIZED_MM_PROCESSOR
+    existing = registry.get("fast_dvlm")
+    if existing is not None and existing is not processor_class:
+        raise RuntimeError(
+            "SGLang already registered a different processor for fast_dvlm: "
+            f"{existing}"
+        )
+    registry["fast_dvlm"] = processor_class
 
 
 def build_inputs(processor: Any, image: str | Path, prompt: str) -> list[int]:
@@ -99,12 +128,13 @@ class SharedBackboneEngine:
     ) -> None:
         os.environ.setdefault("SGLANG_DISABLE_CUDNN_CHECK", "1")
         import sglang as sgl
-        from transformers import AutoProcessor, AutoTokenizer
+        from transformers import AutoTokenizer, Qwen2_5_VLProcessor
 
         self.model_path = str(model_path)
         self.adapter_path = str(adapter_path) if adapter_path is not None else None
         processor_source = str(processor_path or model_path)
-        self.processor = AutoProcessor.from_pretrained(
+        register_fast_dvlm_processor(Qwen2_5_VLProcessor)
+        self.processor = Qwen2_5_VLProcessor.from_pretrained(
             processor_source,
             trust_remote_code=True,
             use_fast=False,
@@ -113,6 +143,7 @@ class SharedBackboneEngine:
         self.processor.tokenizer = tokenizer
         engine_kwargs = engine_arguments(
             self.model_path,
+            processor_path=processor_source,
             adapter_path=self.adapter_path,
             adapter_name=self.adapter_name,
             algorithm=algorithm,
