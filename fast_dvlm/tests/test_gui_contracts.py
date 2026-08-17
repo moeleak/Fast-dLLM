@@ -115,7 +115,8 @@ class GuiContractsTest(unittest.TestCase):
                     "{}\n", encoding="utf-8"
                 )
             (output / "gpu-memory.csv").write_text(
-                "2026-01-01T00:00:00,0,123\n2026-01-01T00:00:00,1,456\n",
+                "2026-01-01T00:00:00,0,123\n"
+                "2026-01-01T00:00:00,123456789+00:00,1,456\n",
                 encoding="utf-8",
             )
             script = Path(__file__).resolve().parents[1] / "eval" / "run_gui_eval_2gpu.sh"
@@ -136,6 +137,14 @@ class GuiContractsTest(unittest.TestCase):
             self.assertIn("Reusing completed 100-sample evaluation", completed.stdout)
             audit = json.loads((output / "gpu-memory-audit.json").read_text())
             self.assertEqual(audit["peak_memory_used_mib"], {"0": 123, "1": 456})
+
+    def test_pipeline_validates_both_native_inference_algorithms(self):
+        root = Path(__file__).resolve().parents[2]
+        pipeline = root / "fast_dvlm" / "train_scripts" / "run_gui_pipeline.sh"
+        text = pipeline.read_text(encoding="utf-8")
+        self.assertIn("for algorithm in mdm spec", text)
+        self.assertIn('planner-${step}${suffix}', text)
+        self.assertIn('--algorithm "${algorithm}"', text)
 
     def test_learning_rates_and_epoch_lengths(self):
         rates = LearningRates(1e-6, 2e-6, 1e-7)

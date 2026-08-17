@@ -98,14 +98,22 @@ PY
 )"
 planner_candidates=()
 for step in 813 1626; do
-  predictions="${work_root}/validation/planner-${step}"
-  score="${predictions}/score.json"
-  run_eval planner "${planner_output}/checkpoint-${step}" "" \
-    "${work_root}/data/planner/validation-100.json" "" mdm "${predictions}" \
-    "${planner_validation_ids_sha256}"
-  python3 "${eval_dir}/score_gui.py" --task planner --predictions-dir "${predictions}" \
-    --expected-samples 100 --step "${step}" --algorithm mdm --output "${score}"
-  planner_candidates+=(--candidate "${score}")
+  for algorithm in mdm spec; do
+    suffix="-${algorithm}"
+    if [[ "${algorithm}" == mdm ]]; then
+      # Keep the original MDM path stable so interrupted experiments can
+      # authenticate and reuse their completed validation output.
+      suffix=""
+    fi
+    predictions="${work_root}/validation/planner-${step}${suffix}"
+    score="${predictions}/score.json"
+    run_eval planner "${planner_output}/checkpoint-${step}" "" \
+      "${work_root}/data/planner/validation-100.json" "" "${algorithm}" "${predictions}" \
+      "${planner_validation_ids_sha256}"
+    python3 "${eval_dir}/score_gui.py" --task planner --predictions-dir "${predictions}" \
+      --expected-samples 100 --step "${step}" --algorithm "${algorithm}" --output "${score}"
+    planner_candidates+=(--candidate "${score}")
+  done
 done
 planner_selection="${work_root}/validation/planner-selection.json"
 python3 "${eval_dir}/select_checkpoint.py" --stage planner \

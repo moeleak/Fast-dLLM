@@ -22,9 +22,12 @@ from pathlib import Path
 peak = {}
 with open(sys.argv[1], newline="", encoding="utf-8") as handle:
     for row in csv.reader(handle):
-        if len(row) != 3:
+        # GNU date --iso-8601=ns uses a comma before fractional seconds, so
+        # historical monitor rows have four CSV fields.  Read the GPU index
+        # and memory from the two trailing fields for both formats.
+        if len(row) < 3:
             continue
-        index, used = int(row[1].strip()), int(row[2].strip())
+        index, used = int(row[-2].strip()), int(row[-1].strip())
         peak[index] = max(peak.get(index, 0), used)
 result = {"schema_version": 1, "peak_memory_used_mib": peak}
 Path(sys.argv[2]).write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
@@ -96,7 +99,7 @@ fi
 monitor_log="${output_dir}/gpu-memory.csv"
 (
   while true; do
-    timestamp="$(date --iso-8601=ns)"
+    timestamp="$(date --iso-8601=seconds)"
     nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits |
       sed "s/^/${timestamp},/"
     sleep 0.2
