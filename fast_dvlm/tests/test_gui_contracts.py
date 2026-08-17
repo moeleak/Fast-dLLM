@@ -146,6 +146,48 @@ class GuiContractsTest(unittest.TestCase):
         self.assertIn('planner-${step}${suffix}', text)
         self.assertIn('--algorithm "${algorithm}"', text)
 
+    def test_failed_planner_gate_persists_selection_audit(self):
+        root = Path(__file__).resolve().parents[2]
+        selector = root / "fast_dvlm" / "eval" / "select_checkpoint.py"
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            candidate = temporary / "candidate.json"
+            output = temporary / "selection.json"
+            candidate.write_text(
+                json.dumps(
+                    {
+                        "step": 1626,
+                        "algorithm": "spec",
+                        "metrics": {
+                            "schema_valid_rate": 1.0,
+                            "content_action_exact": 0.49,
+                            "action_macro_recall": 0.66,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            completed = subprocess.run(
+                [
+                    "python3",
+                    str(selector),
+                    "--stage",
+                    "planner",
+                    "--candidate",
+                    str(candidate),
+                    "--output",
+                    str(output),
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertNotEqual(completed.returncode, 0)
+            audit = json.loads(output.read_text(encoding="utf-8"))
+            self.assertFalse(audit["acceptance"]["passed"])
+            self.assertIn("content_action_exact=0.4900", audit["acceptance"]["error"])
+            self.assertEqual(audit["selected"]["algorithm"], "spec")
+
     def test_learning_rates_and_epoch_lengths(self):
         rates = LearningRates(1e-6, 2e-6, 1e-7)
         self.assertEqual(learning_rate_for("model.layers.0.self_attn.q_proj.weight", rates), 1e-6)

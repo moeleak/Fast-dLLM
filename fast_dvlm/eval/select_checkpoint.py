@@ -38,12 +38,27 @@ def main() -> None:
         if args.stage == "planner"
         else select_grounder_checkpoint(rows)
     )
+    acceptance_error = None
     if args.stage == "planner":
-        validate_planner_acceptance(selected)
-    result = {"schema_version": 1, "stage": args.stage, "selected": selected, "candidates": rows}
+        try:
+            validate_planner_acceptance(selected)
+        except RuntimeError as exc:
+            acceptance_error = str(exc)
+    result = {
+        "schema_version": 1,
+        "stage": args.stage,
+        "selected": selected,
+        "candidates": rows,
+        "acceptance": {
+            "passed": acceptance_error is None,
+            "error": acceptance_error,
+        },
+    }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps(result, indent=2, sort_keys=True))
+    if acceptance_error is not None:
+        raise RuntimeError(acceptance_error)
 
 
 if __name__ == "__main__":
